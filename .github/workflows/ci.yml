@@ -24,6 +24,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ''
           CKA_SCENARIO_PROVIDER: workers-ai
         run: |
+          mkdir -p .local
           python -m cka_sim factory-run > .local/factory-plan.json
           python - <<'PY'
           import json
