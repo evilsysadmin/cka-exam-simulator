@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from cka_sim.api import app
 from cka_sim.identity_poc import IdentityPoCError, verify_staging_cka_token
+from cka_sim.identity_freshness import verify_current_staging_cka_session
 
 
 @pytest.fixture(scope="module")
@@ -150,3 +151,24 @@ def test_revoked_session_token_still_verifies_but_never_grants_lab_access(
         headers={**bearer, "X-CKA-Lab-Request": "1"},
     )
     assert denied.status_code == 403
+
+
+def test_real_go_session_token_never_authorizes_without_live_freshness_reader(
+    go_identity_contract,
+):
+    data = go_identity_contract
+    jwks = json.dumps(data["jwks"], separators=(",", ":")).encode()
+    previously_signed = data["session_bound"]
+    # Go's disposable Mongo fixture has ALREADY revoked this session.
+    # Its Ed25519 signature is still mathematically correct, but CKA has
+    # no deployed, trusted account/session/JTI introspection service.
+    assert verify_staging_cka_token(previously_signed, jwks=jwks) == data["subject"]
+    with pytest.raises(IdentityPoCError):
+        verify_current_staging_cka_session(
+            previously_signed, jwks=jwks,
+        )
+    with pytest.raises(IdentityPoCError):
+        verify_current_staging_cka_session(
+            previously_signed, jwks=jwks,
+            check_freshness=lambda *_: None,
+        )
