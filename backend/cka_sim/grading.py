@@ -25,8 +25,8 @@ def grade_state(s: Scenario, *, deployment: dict[str, Any],
         checks.append({"name": "Réplicas disponibles", "passed": available >= s.target_replicas})
     else:
         selector = (service or {}).get("spec", {}).get("selector")
-        slices = (endpoint_slices or {}).get("items", [])
-        ready = sum(1 for item in slices for ep in item.get("endpoints", [])
+        slices = (endpoint_slices or {}).get("items") or []
+        ready = sum(1 for item in slices for ep in (item.get("endpoints") or [])
                     if ep.get("conditions", {}).get("ready") is True)
         checks.append({"name": "Selector del Service", "passed": selector == {"app": s.target_selector}})
         checks.append({"name": "Backends listos", "passed": ready >= 1})
