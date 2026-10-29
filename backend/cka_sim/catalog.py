@@ -1,4 +1,4 @@
-"""Curated JSON bank and separately quarantined YAML proposals from Ollama."""
+"""Curated JSON bank and quarantined YAML proposals from untrusted LLMs."""
 import json
 from pathlib import Path
 

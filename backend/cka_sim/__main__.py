@@ -1,13 +1,15 @@
 """Explicit developer commands, fixed dedicated Kubernetes lab context only."""
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 import time
 
 from .catalog import PROPOSALS, load_bank, load_proposal, save_generated
 from .kube import LabError, cleanup, create_lab, delete_lab, grade, kubectl, setup, solve_for_smoke
-from .ollama import GenerationError, generate
+from .ollama import GenerationError
+from .providers import SUPPORTED_PROVIDERS, default_model, generate
 
 
 
@@ -52,7 +54,9 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("validate-bank")
     generator = commands.add_parser("generate")
-    generator.add_argument("--model", required=True)
+    generator.add_argument("--provider", choices=SUPPORTED_PROVIDERS,
+                           default=os.getenv("CKA_SCENARIO_PROVIDER", "ollama"))
+    generator.add_argument("--model", default=None)
     generator.add_argument("--type", default="deployment_scale",
                            choices=["deployment_scale", "service_selector"])
     generator.add_argument("--output", type=Path, default=PROPOSALS)
@@ -80,7 +84,8 @@ def main() -> None:
                 # Never publish proposals to the curated bank.
                 # Retry only slug/namespace collisions with older proposals.
                 for attempt in range(3):
-                    s = generate(model=args.model, scenario_type=args.type)
+                    s = generate(provider=args.provider, model=args.model or default_model(args.provider),
+                                 scenario_type=args.type)
                     try:
                         path = save_generated(s, args.output)
                         print(f"Proposal quarantined for review: {path}")
