@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "slug": "recover-scheduler-capacity",
+  "title": "Pods bloqueados por CPU excesiva",
+  "story": "Tras actualizar los recursos del servicio, los pods del Deployment no pueden programarse. La aplicación necesita volver a estar disponible sin cambiar el escalado previsto.",
+  "difficulty": "medium",
+  "minutes": 12,
+  "namespace": "cka-scheduling",
+  "deployment": "batch-api",
+  "scenario_type": "deployment_resources",
+  "initial_replicas": 2,
+  "target_replicas": 2,
+  "initial_selector": "batch-api",
+  "target_selector": "batch-api"
+}

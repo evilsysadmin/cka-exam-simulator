@@ -40,7 +40,7 @@ export default function TerminalPanel({ onCommand, scenario }: Props) {
     const prompt = () => terminal.write('\r\n\x1b[32mcka@lab\x1b[0m:\x1b[34m~\x1b[0m$ ')
     terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  LOCAL PREVIEW')
     terminal.writeln('Scenario: ' + scenario)
-    terminal.writeln('Allowed: kubectl get / describe / scale / patch / rollout / explain')
+    terminal.writeln('Allowed: kubectl get / describe / scale / patch / rollout / explain / set resources')
     terminal.writeln('Try: kubectl get pods -A')
     prompt()
 

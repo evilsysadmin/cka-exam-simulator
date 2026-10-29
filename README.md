@@ -30,8 +30,14 @@ The browser console is **restricted kubectl**, not a full shell. It only targets
 Against a disposable, locally running kind cluster:
 - python -m cka_sim lab-smoke scale-payment-api
 - python -m cka_sim lab-smoke fix-catalog-service
+- python -m cka_sim lab-smoke recover-scheduler-capacity
 
-This checks the initial state fails and the canonical solution passes against real Kubernetes resources. The image nginx:1.27-alpine must be pullable (or preloaded).
+This checks the initial state fails and the canonical solution passes against real Kubernetes resources.
+The scheduling scenario begins with an impossible 16-CPU container request (and matching limit);
+the candidate must set requests.cpu to 10m and limits.cpu to 250m, then verify that
+the new Deployment rollout is observed and all replicas are available.
+Ollama generation remains limited to the two previously supported proposal types;
+the new scenario is curated and must pass the same live kind acceptance gate. The image nginx:1.27-alpine must be pullable (or preloaded).
 
 ## Ollama proposal generation
 

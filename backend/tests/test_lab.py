@@ -14,7 +14,7 @@ def test_health_and_scenarios_are_readable():
     assert client.get("/api/health").json()["status"] == "ok"
     response = client.get("/api/scenarios")
     assert response.status_code == 200
-    assert len(response.json()) == 2
+    assert len(response.json()) == 3
     assert "initial_replicas" not in response.json()[0]
 
 
@@ -52,6 +52,8 @@ def test_lab_mutations_require_header_and_loopback(monkeypatch):
     "kubectl get pods\nkubectl delete nodes",
     "kubectl get pods --server=https://cluster",
     "kubectl get pods --", "kubectl get pods --patch-file /tmp/patch",
+    "kubectl set image deployment/test web=invalid",
+    "kubectl set env deployment/test TOKEN=secret",
 ])
 def test_terminal_rejects_dangerous_commands(command):
     with pytest.raises(kube.LabError):
@@ -70,6 +72,19 @@ def test_terminal_uses_dedicated_kubeconfig(monkeypatch, tmp_path):
     assert kube.execute_dev_kubectl("kubectl get pods -n cka-payments") == "ok"
     assert calls["binary"] == "kubectl"
     assert calls["args"][:4] == ["--kubeconfig", str(config), "--context", "kind-cka-dev"]
+
+
+def test_terminal_allows_resource_repair_without_general_set_verb(monkeypatch, tmp_path):
+    config = tmp_path / "kubeconfig"
+    config.write_text("fake")
+    monkeypatch.setattr(kube, "KUBECONFIG", config)
+    seen = {}
+    monkeypatch.setattr(kube, "_run", lambda binary, args, **kwargs:
+                        seen.update({"binary": binary, "args": args}) or "ok")
+    command = ("kubectl set resources deployment/batch-api -n cka-scheduling "
+               "--containers=web --requests=cpu=10m --limits=cpu=250m")
+    assert kube.execute_dev_kubectl(command) == "ok"
+    assert seen["args"][4:6] == ["set", "resources"]
 
 
 def test_lab_delete_cannot_target_another_cluster(monkeypatch):
