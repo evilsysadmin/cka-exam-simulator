@@ -63,14 +63,48 @@ The next PR should port candidate-safe views, then add a read-only
 and compare live cluster snapshots. Never enable a public grader or remote
 student terminal based solely on offline parity tests.
 
+## Milestone 3: safe candidate presentation (no API handoff)
+
+The Go `scenario.Candidate` / `CandidateBank` functions now return an
+explicitly allowlisted **eight-field** JSON projection: `slug`, `title`,
+`story`, `difficulty`, `minutes`, `domain`, `statement` and
+`namespace`. This exactly mirrors the current Python
+`Scenario.candidate_view()` contract, including Spanish task statements
+for scaling, Service selectors and scheduling resource fixes.
+
+The view never embeds a full `Scenario`; internal initial/target selectors,
+initial replicas, scenario implementation type, deployment metadata and
+grading/solution data cannot become JSON fields accidentally. The candidate
+statement intentionally explains the requested outcome (including desired
+replicas or CPU values), **not the initial fixture or secret answer code**.
+Unvalidated Go scenarios are rejected before rendering.
+
+The offline `go/cmd/cka-candidate-views` executable emits sorted public
+projections. CI compares its complete JSON output field-for-field with
+Python's reference for **every curated scenario**, also verifying an exact
+public-field allowlist. Go regression tests explicitly check both the
+serialized JSON keys and full Spanish statements; the CLI also builds
+statically for Linux ARM64.
+
+```bash
+cd go
+go run ./cmd/cka-candidate-views -bank ../scenarios > /tmp/cka-candidate-views.json
+python ../scripts/check_go_candidate_parity.py \
+  --bank ../scenarios --go-report /tmp/cka-candidate-views.json
+```
+
+**No Go HTTP server, student session or Kubernetes permission** is enabled
+by this milestone. Python still owns the running dev API and grading.
+
 ## Staged migration contract
 
 1. **Now:** Go reads and validates curated JSON in parallel with Python.
    The Python backend remains authoritative for Kubernetes labs, terminal,
    deterministic grading, scenario generation and API endpoints.
-2. **In progress:** Deterministic grading parity is now covered against 30
-   shared, offline Kubernetes-state snapshots. Next port candidate-safe views
-   and add further live-kind observer parity before any grading handoff.
+2. **Covered offline:** Deterministic grading parity on 30 shared
+   Kubernetes snapshots, and candidate-safe view parity for the curated bank
+   are independently checked against Python. Next: a pinned, read-only
+   live-kind resource observer before any Go grading handoff.
 3. Port isolated lab orchestration with `client-go`, preserving the
    fixed-kind development context and strict per-user runner isolation.
 4. Port the operator-only Workers AI scenario factory, quarantine, budget
