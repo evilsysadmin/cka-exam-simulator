@@ -1,0 +1,76 @@
+name: ShadowOps Identity · Go to CKA contract
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/identity-contract.yml'
+      - 'scripts/identity_go_contract_fixture.go'
+      - 'backend/cka_sim/identity_poc.py'
+      - 'backend/tests/test_identity_crossrepo_contract.py'
+      - 'backend/tests/test_identity_poc.py'
+      - 'pyproject.toml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/identity-contract.yml'
+      - 'scripts/identity_go_contract_fixture.go'
+      - 'backend/cka_sim/identity_poc.py'
+      - 'backend/tests/test_identity_crossrepo_contract.py'
+      - 'backend/tests/test_identity_poc.py'
+      - 'pyproject.toml'
+permissions:
+  contents: read
+
+jobs:
+  cross-repository:
+    name: Pinned Identity Go JWKS + ephemeral JWT → CKA Python verifier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout CKA consumer
+        uses: actions/checkout@v4
+      - name: Checkout known reviewed Identity core, not moving main
+        uses: actions/checkout@v4
+        with:
+          repository: evilsysadmin/shadowops-infra
+          ref: d51f6c43ab430f2c0c5b2b5ee83f2c6c0da301e3
+          path: .identity-contract-ref
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.x'
+          cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Check Go contract fixture formatting
+        run: |
+          set -euo pipefail
+          files="$(gofmt -l scripts/identity_go_contract_fixture.go)"
+          if [[ -n "$files" ]]; then
+            gofmt -d scripts/identity_go_contract_fixture.go
+            exit 1
+          fi
+      - name: Sign synthetic CKA contract with Identity Go core and random CI-only seed
+        env:
+          CKA_IDENTITY_CONTRACT_FIXTURE_FILE: ${{ runner.temp }}/cka-identity-contract.json
+        run: |
+          set -euo pipefail
+          test ! -e "$CKA_IDENTITY_CONTRACT_FIXTURE_FILE"
+          (
+            cd .identity-contract-ref/services/identity
+            go run ../../../scripts/identity_go_contract_fixture.go
+          )
+          test -s "$CKA_IDENTITY_CONTRACT_FIXTURE_FILE"
+      - name: Install CKA consumer verifier and run Go/Python interoperability
+        env:
+          CKA_IDENTITY_CONTRACT_FIXTURE_FILE: ${{ runner.temp }}/cka-identity-contract.json
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[dev]'
+          python -m pytest backend/tests/test_identity_crossrepo_contract.py backend/tests/test_identity_poc.py
+      - name: Remove transient synthetic token vectors
+        if: always()
+        env:
+          CKA_IDENTITY_CONTRACT_FIXTURE_FILE: ${{ runner.temp }}/cka-identity-contract.json
+        run: rm -f "$CKA_IDENTITY_CONTRACT_FIXTURE_FILE"
