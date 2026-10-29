@@ -9,7 +9,9 @@ import os
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+from cka_sim.api import app
 from cka_sim.identity_poc import IdentityPoCError, verify_staging_cka_token
 
 
@@ -57,3 +59,40 @@ def test_real_go_identity_public_key_cannot_be_replaced(go_identity_contract):
         verify_staging_cka_token(
             data["valid"], jwks=json.dumps(wrong_key).encode()
         )
+
+
+def test_go_identity_signed_token_reaches_local_cka_diagnostic_only(
+    go_identity_contract, monkeypatch, tmp_path
+):
+    data = go_identity_contract
+    public_key_file = tmp_path / "identity-public.jwks"
+    public_key_file.write_text(json.dumps(data["jwks"], separators=(",", ":")))
+    monkeypatch.setenv("CKA_IDENTITY_POC_JWKS_FILE", str(public_key_file))
+    monkeypatch.setenv("CKA_IDENTITY_POC_ENABLED", "1")
+    monkeypatch.delenv("CKA_ENABLE_LOCAL_LAB", raising=False)
+    client = TestClient(app)
+    headers = {
+        "X-CKA-Identity-PoC": "1",
+        "Authorization": "Bearer " + data["valid"],
+    }
+    resp = client.get("/api/dev/identity/poc/me", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "sub": data["subject"],
+        "aud": "cka-simulator",
+        "status": "signature-only-poc",
+    }
+    for rejected in ("probe", "wrong_audience", "wrong_issuer", "expired", "future"):
+        resp = client.get(
+            "/api/dev/identity/poc/me",
+            headers={**headers, "Authorization": "Bearer " + data[rejected]},
+        )
+        assert resp.status_code == 401
+        assert data[rejected] not in json.dumps(resp.json())
+
+    # Signed identity alone does not enable the developer's kube runner.
+    attempt = client.post(
+        "/api/dev/scenarios/scale-payment-api/setup",
+        headers={"X-CKA-Lab-Request": "1", "Authorization": "Bearer " + data["valid"]},
+    )
+    assert attempt.status_code == 403
