@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from .catalog import load_bank
 from .kube import LabError, execute_dev_kubectl, grade, setup
+from .session import SessionError, get_session, require_session, start_session
 
 app = FastAPI(title="CKA Simulator", version="0.2.0")
 
@@ -42,13 +43,27 @@ def scenario_or_404(slug: str):
     return scenario
 
 
+def checked_session(*, slug: str | None = None, active: bool = False) -> dict:
+    try:
+        return require_session(slug=slug, active=active)
+    except SessionError as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
+
+
+@app.get("/api/dev/session")
+def local_session(request: Request):
+    dev_only(request)
+    return {"session": get_session()}
+
+
 @app.post("/api/dev/scenarios/{slug}/setup")
 def setup_scenario(slug: str, request: Request):
     dev_only(request)
     scenario = scenario_or_404(slug)
     try:
         setup(scenario)
-        return {"status": "created", "namespace": scenario.namespace}
+        return {"status": "created", "namespace": scenario.namespace,
+                "session": start_session(scenario.slug, scenario.minutes)}
     except LabError as exc:
         raise HTTPException(503, detail=str(exc)) from exc
 
@@ -56,6 +71,7 @@ def setup_scenario(slug: str, request: Request):
 @app.post("/api/dev/scenarios/{slug}/grade")
 def grade_scenario(slug: str, request: Request):
     dev_only(request)
+    checked_session(slug=slug)
     try:
         return grade(scenario_or_404(slug))
     except LabError as exc:
@@ -69,6 +85,7 @@ class Command(BaseModel):
 @app.post("/api/dev/terminal/command")
 def run_kubectl(data: Command, request: Request):
     dev_only(request)
+    checked_session(active=True)
     try:
         return {"output": execute_dev_kubectl(data.command)}
     except LabError as exc:
