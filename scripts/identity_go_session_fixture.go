@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	ciMongoURL = "mongodb://127.0.0.1:27018/?replicaSet=identity-rs&directConnection=true"
+	ciMongoURL  = "mongodb://127.0.0.1:27018/?replicaSet=identity-rs&directConnection=true"
 	ciCandidate = "ephemeral-CI-only-identity-cka-candidate"
 )
 
