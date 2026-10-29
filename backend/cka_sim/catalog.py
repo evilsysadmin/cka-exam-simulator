@@ -52,7 +52,7 @@ def load_proposal(path: Path) -> Scenario:
         raise ValueError("YAML proposal exceeds size limit")
     raw = path.read_text(encoding="utf-8")
     try:
-        if any(isinstance(event, AliasEvent) or event.anchor is not None
+        if any(isinstance(event, AliasEvent) or getattr(event, "anchor", None) is not None
                for event in yaml.parse(raw)):
             raise ValueError("YAML aliases and anchors are not allowed")
         data = yaml.load(raw, Loader=_UniqueKeysLoader)
@@ -70,6 +70,9 @@ def save_generated(s: Scenario, directory: Path = PROPOSALS) -> Path:
     s = Scenario.model_validate(s.model_dump(mode="json"))
     _check_curated_collisions(s)
     directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{s.slug}.yaml"
+    if path.exists():
+        raise FileExistsError(path)
     for existing in sorted(directory.glob("*.yaml")):
         previous = load_proposal(existing)
         if previous.namespace == s.namespace:
