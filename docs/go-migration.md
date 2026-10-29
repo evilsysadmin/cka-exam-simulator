@@ -139,6 +139,43 @@ validate per-user isolated runners. The current kind kubeconfig still has
 development privileges; this code only exercises read methods, not a
 production-grade Kubernetes RBAC boundary.
 
+## Milestone 5: actual namespace-scoped Kubernetes RBAC
+
+The Go `cka-observe -dev-live` CLI now **requires** a short-lived bearer
+token for the `cka-grade-observer` ServiceAccount of the **exact scenario
+namespace**, rather than forwarding the powerful developer client certificate.
+The kubeconfig still must contain a single `kind-cka-dev` context, literal
+loopback HTTPS server, embedded CA, no proxy, no exec plugins, no client
+certificates and no external credential paths. The expected JWT ServiceAccount
+subject is checked locally as an early guard; **Kubernetes itself verifies the
+token signature and enforces Role/RoleBinding authorization**. Parsing a JWT
+claim is not a substitute for cryptographic validation by the API server.
+
+In disposable `kind` CI, trusted Python setup creates a per-exercise
+ServiceAccount, namespace Role and RoleBinding. The Role grants only
+`get deployments.apps` with `resourceNames: [payment-api]`,
+`get services` with `resourceNames: [payment-api-svc]`, and
+`list endpointslices.discovery.k8s.io` **within that namespace**.
+Kubernetes RBAC cannot constrain a LIST using the request's label selector,
+so all EndpointSlices in this dedicated exercise namespace are observable;
+this **requires one isolated namespace per exam context** and is not safe
+for a shared tenant namespace. It has no watch, list-deployment, write,
+secrets, cluster or cross-namespace permissions.
+
+The Python test harness requests a bounded-duration ServiceAccount token,
+constructs a private, ephemeral kubeconfig, runs real
+`kubectl auth can-i` SelfSubjectAccessReviews for required rights and
+explicit denials, then compares Go and Python grades before/after a live
+Deployment repair. The original administrator kubeconfig remains inside
+the trusted test harness solely for setup/solution/cleanup. The Go CLI
+is never given it.
+
+**This is still a development-only isolation proof**, not a public exam
+runner: no end-user identity, isolation across distinct cluster tenants,
+per-user resource limits or production-safe RBAC provisioner has been
+deployed. Never reuse the kind control-plane administrator certificate
+for user-facing operations. No OCI or Workers AI inference occurs.
+
 ## Staged migration contract
 
 1. **Now:** Go reads and validates curated JSON in parallel with Python.
@@ -149,9 +186,10 @@ production-grade Kubernetes RBAC boundary.
    are independently checked against Python. Next: a pinned, read-only
    live-kind resource observer before any Go grading handoff.
 3. **In progress:** client-go now supports an allowlisted, read-only
-   observer for fixed kind-cka-dev and live-kind grading parity. Next port
-   carefully isolated lab orchestration; never reuse the powerful local kind
-   kubeconfig as production per-user credentials.
+   observer with **real namespace-scoped Role/RoleBinding and ServiceAccount
+   token** tested in the fixed kind-cka-dev cluster. Next: an isolated,
+   authenticated multi-user lab controller and admission controls. Do not
+   treat the local-kind role bootstrap as production provisioning.
 4. Port the operator-only Workers AI scenario factory, quarantine, budget
    and review gates to Go, preserving the no-auto-publication rule.
 5. Only once equivalent integration and live-kind acceptance are green,

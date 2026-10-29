@@ -3,11 +3,15 @@
 package observe
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/rest"
@@ -16,6 +20,29 @@ import (
 )
 
 const Context = "kind-cka-dev"
+const ObserverAccount = "cka-grade-observer"
+
+var scopedNamespace = regexp.MustCompile("^cka-[a-z][a-z0-9-]*[a-z0-9]$")
+
+// tokenSubject is a preflight sanity check on the unverified JWT payload.
+// Kubernetes API server verifies the token signature and RBAC on each call.
+func tokenSubject(token string) (string, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 || len(token) > 16384 {
+		return "", errors.New("invalid scoped token")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || len(raw) > 4096 {
+		return "", errors.New("invalid scoped token payload")
+	}
+	var claims struct {
+		Subject string "json:\"sub\""
+	}
+	if err := json.Unmarshal(raw, &claims); err != nil || claims.Subject == "" {
+		return "", errors.New("missing scoped token subject")
+	}
+	return claims.Subject, nil
+}
 
 func checkedLocalURL(server string) error {
 	u, err := url.Parse(server)
@@ -34,16 +61,20 @@ func checkedLocalURL(server string) error {
 	return nil
 }
 
-// validate refuses multi-context kubeconfig files, external paths, exec auth,
-// insecure TLS and nonlocal API servers. No client is created on failure.
-func validate(cfg *api.Config) error {
+// validate continues to support the local kind admin certificate for the
+// trusted test harness, never for the Go observer CLI.
+func validate(cfg *api.Config) error { return validateForNamespace(cfg, "") }
+
+// validateForNamespace accepts only one fixed local kind context.
+// A namespace requires a short-lived SA token, not the developer certificate.
+func validateForNamespace(cfg *api.Config, namespace string) error {
 	if cfg == nil || cfg.CurrentContext != Context ||
 		len(cfg.Contexts) != 1 || len(cfg.Clusters) != 1 || len(cfg.AuthInfos) != 1 {
 		return errors.New("refusing kubeconfig outside fixed kind-cka-dev context")
 	}
 	ctx, ok := cfg.Contexts[Context]
 	if !ok || ctx == nil || ctx.Cluster != Context || ctx.AuthInfo != Context ||
-		ctx.Namespace != "" {
+		ctx.Namespace != namespace {
 		return errors.New("unexpected kind context definition")
 	}
 	cluster, ok := cfg.Clusters[Context]
@@ -58,19 +89,46 @@ func validate(cfg *api.Config) error {
 	user, ok := cfg.AuthInfos[Context]
 	if !ok || user == nil || user.Exec != nil || user.AuthProvider != nil ||
 		user.Impersonate != "" || len(user.ImpersonateGroups) != 0 ||
-		len(user.ImpersonateUserExtra) != 0 ||
-		user.Token != "" || user.TokenFile != "" ||
+		len(user.ImpersonateUserExtra) != 0 || user.TokenFile != "" ||
 		user.Username != "" || user.Password != "" ||
-		user.ClientCertificate != "" || user.ClientKey != "" ||
-		len(user.ClientCertificateData) == 0 || len(user.ClientKeyData) == 0 {
-		return errors.New("kind auth must use embedded client cert/key without plugins")
+		user.ClientCertificate != "" || user.ClientKey != "" {
+		return errors.New("kind auth must not use plugins, impersonation or credential files")
+	}
+	if namespace == "" {
+		if user.Token != "" || len(user.ClientCertificateData) == 0 ||
+			len(user.ClientKeyData) == 0 {
+			return errors.New("developer kind auth requires embedded client cert/key")
+		}
+		return nil
+	}
+	if !scopedNamespace.MatchString(namespace) || len(namespace) > 55 ||
+		len(user.ClientCertificateData) != 0 || len(user.ClientKeyData) != 0 {
+		return errors.New("scoped kind auth requires a CKA namespace and token only")
+	}
+	subject, err := tokenSubject(user.Token)
+	expected := "system:serviceaccount:" + namespace + ":" + ObserverAccount
+	if err != nil || subject != expected {
+		return errors.New("scoped kind auth has wrong service-account subject")
 	}
 	return nil
 }
 
-// LoadLocalConfig accepts only a private, explicit kubeconfig file, normally
-// <repo>/.local/kubeconfig produced by kind. Never load ~/.kube/config.
+// LoadLocalConfig is kept for trusted local tests only. The CLI invokes the
+// scoped entrypoint below and refuses this powerful developer identity.
 func LoadLocalConfig(path string) (*rest.Config, error) {
+	return loadLocalConfig(path, "")
+}
+
+// LoadScopedLocalConfig requires a scoped SA token for the exact validated
+// scenario namespace. The Kubernetes API enforces the real RBAC boundary.
+func LoadScopedLocalConfig(path, namespace string) (*rest.Config, error) {
+	if !scopedNamespace.MatchString(namespace) || len(namespace) > 55 {
+		return nil, errors.New("invalid CKA scope")
+	}
+	return loadLocalConfig(path, namespace)
+}
+
+func loadLocalConfig(path, namespace string) (*rest.Config, error) {
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("dedicated kubeconfig path must be absolute")
 	}
@@ -82,7 +140,7 @@ func LoadLocalConfig(path string) (*rest.Config, error) {
 	if err != nil {
 		return nil, errors.New("cannot read dedicated kind kubeconfig")
 	}
-	if err := validate(cfg); err != nil {
+	if err := validateForNamespace(cfg, namespace); err != nil {
 		return nil, err
 	}
 	restCfg, err := clientcmd.NewNonInteractiveClientConfig(
