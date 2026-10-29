@@ -1,0 +1,11 @@
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+/release.json
+  Cache-Control: no-store
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "build:public": "tsc --noEmit && vite build --config vite.public.config.ts && node scripts/prepare-public.mjs",
+    "test:public": "node --test tests/public-preview.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
