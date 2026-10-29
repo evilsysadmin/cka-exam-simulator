@@ -1,0 +1,912 @@
+[
+  {
+    "name": "scale_solved",
+    "scenario_slug": "scale-payment-api",
+    "deployment": {
+      "spec": {
+        "replicas": 3
+      },
+      "status": {
+        "availableReplicas": 3
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": true
+  },
+  {
+    "name": "scale_initial_state",
+    "scenario_slug": "scale-payment-api",
+    "deployment": {
+      "spec": {
+        "replicas": 1
+      },
+      "status": {
+        "availableReplicas": 1
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "scale_desired_only",
+    "scenario_slug": "scale-payment-api",
+    "deployment": {
+      "spec": {
+        "replicas": 3
+      },
+      "status": {
+        "availableReplicas": 0
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "scale_available_but_wrong_desired",
+    "scenario_slug": "scale-payment-api",
+    "deployment": {
+      "spec": {
+        "replicas": 1
+      },
+      "status": {
+        "availableReplicas": 3
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "scale_missing_deployment",
+    "scenario_slug": "scale-payment-api",
+    "deployment": {},
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "scale_missing_status",
+    "scenario_slug": "scale-payment-api",
+    "deployment": {
+      "spec": {
+        "replicas": 3
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "scale_surplus_available",
+    "scenario_slug": "scale-payment-api",
+    "deployment": {
+      "spec": {
+        "replicas": 3
+      },
+      "status": {
+        "availableReplicas": 4
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": true
+  },
+  {
+    "name": "service_solved",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": true
+  },
+  {
+    "name": "service_broken_selector",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-legacy"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "service_extra_selector_key",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api",
+          "tier": "backend"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "service_missing_service",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "service_no_slices",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "service_empty_slices",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": []
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "service_null_endpoints",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": null
+        }
+      ]
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "service_unready_endpoint",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "service_numeric_ready_not_boolean",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "service_multiple_slices_one_ready",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {
+        "replicas": 2
+      }
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": false
+              }
+            }
+          ]
+        },
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": true
+  },
+  {
+    "name": "service_missing_deployment_replicas",
+    "scenario_slug": "fix-catalog-service",
+    "deployment": {
+      "spec": {}
+    },
+    "service": {
+      "spec": {
+        "selector": {
+          "app": "catalog-api"
+        }
+      }
+    },
+    "endpoint_slices": {
+      "items": [
+        {
+          "endpoints": [
+            {
+              "conditions": {
+                "ready": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected_passed": false
+  },
+  {
+    "name": "resources_solved",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": true
+  },
+  {
+    "name": "resources_initial_broken_cpu",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "16000m"
+                  },
+                  "limits": {
+                    "cpu": "16000m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_wrong_cpu_limit",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "500m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_missing_web_container",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_wrong_replicas",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 1,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_stale_observed_generation",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 1,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_old_replica_set_only",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 0,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_unavailable",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 1
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_missing_metadata",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_missing_generation",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {},
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  },
+  {
+    "name": "resources_newer_observed_generation",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 3,
+        "updatedReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": true
+  },
+  {
+    "name": "resources_missing_status",
+    "scenario_slug": "recover-scheduler-capacity",
+    "deployment": {
+      "metadata": {
+        "generation": 2
+      },
+      "spec": {
+        "replicas": 2,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "sidecar",
+                "resources": {
+                  "requests": {
+                    "cpu": "30m"
+                  }
+                }
+              },
+              {
+                "name": "web",
+                "resources": {
+                  "requests": {
+                    "cpu": "10m"
+                  },
+                  "limits": {
+                    "cpu": "250m"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "service": null,
+    "endpoint_slices": null,
+    "expected_passed": false
+  }
+]
