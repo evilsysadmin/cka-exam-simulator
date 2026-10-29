@@ -1,0 +1,42 @@
+name: Go scenario contract
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go-scenario-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.mod
+      - name: Test trusted JSON scenarios and reject untrusted fields
+        run: go test -race -count=1 ./...
+      - name: Static Go analysis
+        run: go vet ./...
+      - name: Prove parity for existing curated JSON bank (no Kubernetes)
+        run: |
+          set -euo pipefail
+          expected='CKA_GO_BANK_VALID scenarios=3'
+          actual="$(go run ./cmd/cka-scenarios -bank ../scenarios)"
+          test "$actual" = "$expected"
+      - name: Compile the same validator for Linux ARM64 / OCI A1
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cka-go"
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath \
+            -o "$RUNNER_TEMP/cka-go/cka-scenarios-linux-arm64" \
+            ./cmd/cka-scenarios
+          file "$RUNNER_TEMP/cka-go/cka-scenarios-linux-arm64" | grep -E 'ARM aarch64|ARM64|aarch64'
