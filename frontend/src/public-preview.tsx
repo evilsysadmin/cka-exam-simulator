@@ -11,6 +11,10 @@ const cases = [
     namespace: 'cka-catalog', difficulty: 'medium',
     story: 'Los pods del catálogo están sanos, pero el Service no encuentra destinos.',
     task: 'Repara catalog-api-svc para que seleccione los pods correctamente.' },
+  { slug: 'recover-scheduler-capacity', title: 'Pods bloqueados por CPU excesiva',
+    domain: 'workloads', minutes: 12, namespace: 'cka-scheduling', difficulty: 'medium',
+    story: 'El Deployment está definido pero ningún pod consigue programarse.',
+    task: 'Repara las peticiones y límites de CPU para recuperar las réplicas disponibles.' },
 ] as const
 
 function Preview() {
@@ -37,7 +41,7 @@ function Preview() {
       </div>
       <div className="workspace">
         <aside className="sidebar">
-          <div className="section-heading"><span>SCENARIO BANK</span><span className="count">02</span></div>
+          <div className="section-heading"><span>SCENARIO BANK</span><span className="count">{String(cases.length).padStart(2,'0')}</span></div>
           {cases.map((s,i)=><button key={s.slug} type="button" aria-pressed={selected===i}
             className={'scenario-choice '+(selected===i?'selected':'')} onClick={()=>setSelected(i)}>
             <span className="scenario-number">{String(i+1).padStart(2,'0')}</span>

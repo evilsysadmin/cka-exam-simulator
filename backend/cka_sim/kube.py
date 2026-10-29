@@ -78,13 +78,16 @@ def solve_for_smoke(s: Scenario) -> None:
     if s.scenario_type == "deployment_scale":
         kubectl(["scale", f"deployment/{s.deployment}", "-n", s.namespace,
                  f"--replicas={s.target_replicas}"])
+    elif s.scenario_type == "deployment_resources":
+        kubectl(["set", "resources", f"deployment/{s.deployment}", "-n", s.namespace,
+                 "--containers=web", "--requests=cpu=10m", "--limits=cpu=250m"])
     else:
         patch = json.dumps({"spec": {"selector": {"app": s.target_selector}}})
         kubectl(["patch", "service", s.service, "-n", s.namespace,
                  "--type=merge", "-p", patch])
 
 
-ALLOWED_VERBS = frozenset({"get", "describe", "scale", "patch", "rollout", "explain"})
+ALLOWED_VERBS = frozenset({"get", "describe", "scale", "patch", "rollout", "explain", "set"})
 
 
 def execute_dev_kubectl(command: str) -> str:
@@ -96,7 +99,9 @@ def execute_dev_kubectl(command: str) -> str:
     except ValueError as exc:
         raise LabError("Malformed command") from exc
     if len(words) < 2 or words[0] != "kubectl" or words[1] not in ALLOWED_VERBS:
-        raise LabError("Only kubectl get/describe/scale/patch/rollout/explain are supported")
+        raise LabError("Only kubectl get/describe/scale/patch/rollout/explain/set resources are supported")
+    if words[1] == "set" and (len(words) < 4 or words[2] != "resources"):
+        raise LabError("Only kubectl set resources is supported")
     forbidden = ("--kubeconfig", "--context", "--server", "--token", "--client-key", "--client-certificate",
                  "--certificate-authority", "--as", "--as-group", "--raw", "--filename", "--output-watch-events")
     for word in words[1:]:

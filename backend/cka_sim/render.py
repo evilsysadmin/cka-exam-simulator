@@ -1,6 +1,9 @@
 """Trusted Kubernetes manifests derived only from validated safe parameters."""
 import yaml
-from .models import Scenario
+from .models import (
+    Scenario, HEALTHY_CPU_REQUEST, HEALTHY_CPU_LIMIT,
+    BROKEN_CPU_REQUEST, BROKEN_CPU_LIMIT,
+)
 
 IMAGE = "ghcr.io/nginxinc/nginx-unprivileged:1.27-alpine@sha256:e234d4f7e346c098f7b22245690372382aded5be988611eb2c53ae62231eece7"
 
@@ -18,8 +21,12 @@ def fixture_objects(s: Scenario) -> list[dict]:
                     "securityContext": {"allowPrivilegeEscalation": False,
                                         "runAsNonRoot": True, "runAsUser": 101, "runAsGroup": 101,
                                         "capabilities": {"drop": ["ALL"]}},
-                    "resources": {"requests": {"cpu": "10m", "memory": "32Mi"},
-                                  "limits": {"cpu": "250m", "memory": "128Mi"}},
+                    "resources": {"requests": {
+                        "cpu": BROKEN_CPU_REQUEST if s.scenario_type == "deployment_resources"
+                        else HEALTHY_CPU_REQUEST, "memory": "32Mi"},
+                                  "limits": {
+                        "cpu": BROKEN_CPU_LIMIT if s.scenario_type == "deployment_resources"
+                        else HEALTHY_CPU_LIMIT, "memory": "128Mi"}},
                 }], "automountServiceAccountToken": False}}}},
         {"apiVersion": "v1", "kind": "Service", "metadata": {
             "name": s.service, "namespace": s.namespace}, "spec": {

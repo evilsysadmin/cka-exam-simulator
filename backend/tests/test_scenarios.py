@@ -16,9 +16,10 @@ def bank():
     return load_bank()
 
 
-def test_bank_contains_two_different_scenarios(bank):
-    assert len(bank) == 2
-    assert {s.scenario_type for s in bank.values()} == {"deployment_scale", "service_selector"}
+def test_bank_contains_three_different_scenarios(bank):
+    assert len(bank) == 3
+    assert {s.scenario_type for s in bank.values()} == {
+        "deployment_scale", "service_selector", "deployment_resources"}
 
 
 def test_fixtures_are_fixed_and_namespaced(bank):
@@ -34,6 +35,13 @@ def test_fixtures_are_fixed_and_namespaced(bank):
         assert docs[2]["spec"]["ports"][0] == {"port": 80, "targetPort": 8080}
         assert docs[2]["metadata"]["namespace"] == s.namespace
         assert "hostPath" not in render_yaml(s)
+        resources = container["resources"]
+        if s.scenario_type == "deployment_resources":
+            assert resources["requests"]["cpu"] == "16000m"
+            assert resources["limits"]["cpu"] == "16000m"
+        else:
+            assert resources["requests"]["cpu"] == "10m"
+            assert resources["limits"]["cpu"] == "250m"
         assert container["securityContext"].get("privileged") is not True
 
 
@@ -64,8 +72,10 @@ def test_initial_states_cannot_pass_by_design(bank):
         data = s.model_dump()
         if s.scenario_type == "deployment_scale":
             data["initial_replicas"] = s.target_replicas
-        else:
+        elif s.scenario_type == "service_selector":
             data["initial_selector"] = s.target_selector
+        else:
+            data["initial_replicas"] = s.target_replicas + 1
         with pytest.raises(ValidationError):
             Scenario.model_validate(data)
 
@@ -114,6 +124,40 @@ def test_endpoint_slice_with_null_endpoints_is_unsolved_not_an_error(bank):
         grade = grade_state(s, deployment=deployment, service=service, endpoint_slices=slices)
         assert grade.passed is False
         assert grade.checks[1] == {"name": "Backends listos", "passed": False}
+
+
+def test_resource_scenario_requires_correct_cpu_and_completed_rollout(bank):
+    s = bank["recover-scheduler-capacity"]
+    deployment = {
+        "metadata": {"generation": 2},
+        "spec": {
+            "replicas": s.target_replicas,
+            "template": {"spec": {"containers": [
+                {"name": "web", "resources": {
+                    "requests": {"cpu": "10m"}, "limits": {"cpu": "250m"}}},
+            ]}},
+        },
+        "status": {"observedGeneration": 2, "updatedReplicas": 2,
+                   "availableReplicas": 2},
+    }
+    assert grade_state(s, deployment=deployment).passed
+    assert not grade_state(s, deployment={}).passed
+    deployment["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"] = "16000m"
+    assert not grade_state(s, deployment=deployment).passed
+    deployment["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"] = "10m"
+    deployment["status"]["observedGeneration"] = 1
+    assert not grade_state(s, deployment=deployment).passed
+    deployment["status"]["observedGeneration"] = 2
+    deployment["status"]["updatedReplicas"] = 1
+    assert not grade_state(s, deployment=deployment).passed
+    deployment["status"]["updatedReplicas"] = 2
+    deployment["spec"]["replicas"] = 1
+    assert not grade_state(s, deployment=deployment).passed
+
+
+def test_ollama_cannot_generate_curated_only_resource_type():
+    with pytest.raises(ValueError, match="Unsupported"):
+        generate(model="local-test", scenario_type="deployment_resources")
 
 
 def test_ollama_receives_json_schema(bank):
