@@ -58,7 +58,7 @@ def load_proposal(path: Path) -> Scenario:
         data = yaml.load(raw, Loader=_UniqueKeysLoader)
     except yaml.YAMLError as exc:
         raise ValueError(f"Invalid proposal YAML: {exc}") from exc
-    scenario = Scenario.model_validate(data)
+    scenario = Scenario.model_validate_json(json.dumps(data))
     if path.stem != scenario.slug:
         raise ValueError("YAML filename must match proposal slug")
     _check_curated_collisions(scenario)
@@ -67,7 +67,7 @@ def load_proposal(path: Path) -> Scenario:
 
 def save_generated(s: Scenario, directory: Path = PROPOSALS) -> Path:
     """Save only validated DSL as YAML under a quarantine directory."""
-    s = Scenario.model_validate(s.model_dump(mode="json"))
+    s = Scenario.model_validate_json(s.model_dump_json())
     _check_curated_collisions(s)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{s.slug}.yaml"

@@ -92,7 +92,7 @@ def test_candidate_cannot_see_private_fixture(bank):
 def test_generated_proposal_quarantine(bank, tmp_path):
     data = bank["scale-payment-api"].model_dump(mode="json")
     data.update(slug="generated-payments", namespace="cka-generated-payments")
-    s = Scenario.model_validate(data)
+    s = Scenario.model_validate_json(json.dumps(data))
     output = save_generated(s, tmp_path / "generated")
     assert output.suffix == ".yaml"
     assert yaml.safe_load(output.read_text())["slug"] == s.slug
@@ -132,10 +132,10 @@ def test_proposal_yaml_rejects_extra_fields_and_curated_identity(bank, tmp_path)
 def test_proposal_yaml_rejects_namespace_reuse_and_size(bank, tmp_path):
     original = bank["scale-payment-api"].model_dump(mode="json")
     original.update(slug="new-lab", namespace="cka-new-lab")
-    s = Scenario.model_validate(original)
+    s = Scenario.model_validate_json(json.dumps(original))
     directory = tmp_path / "generated"
     output = save_generated(s, directory)
-    colliding = Scenario.model_validate({**original, "slug": "newer-lab"})
+    colliding = Scenario.model_validate_json(json.dumps({**original, "slug": "newer-lab"}))
     with pytest.raises(ValueError, match="namespace"):
         save_generated(colliding, directory)
     output.write_text("a" * 17_000)
