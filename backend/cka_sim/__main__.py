@@ -11,6 +11,7 @@ from .kube import LabError, cleanup, create_lab, delete_lab, grade, kubectl, set
 from .ollama import GenerationError
 from .providers import SUPPORTED_PROVIDERS, default_model, generate
 from .quality import audit_proposals
+from .review import review_queue
 from .verification import save_report, verify_batch
 
 
@@ -59,6 +60,7 @@ def main() -> None:
     auditor = commands.add_parser("audit-proposals")
     auditor.add_argument("--directory", type=Path, default=PROPOSALS)
     commands.add_parser("verify-proposals")
+    commands.add_parser("review-queue")
     generator = commands.add_parser("generate")
     generator.add_argument("--provider", choices=SUPPORTED_PROVIDERS,
                            default=os.getenv("CKA_SCENARIO_PROVIDER", "ollama"))
@@ -96,6 +98,8 @@ def main() -> None:
                   file=sys.stderr)
             if not report["passed"]:
                 raise SystemExit(1)
+        elif args.command == "review-queue":
+            print(json.dumps(review_queue(), indent=2, ensure_ascii=False))
         elif args.command == "generate":
             if not 1 <= args.count <= 20:
                 raise ValueError("--count must be between 1 and 20")

@@ -115,6 +115,7 @@ make scenario-smoke PROPOSAL=scenarios/generated/<generated-slug>.yaml
 # Or verify up to five offline-audited proposals sequentially:
 make scenario-verify
 cat .local/proposal-verification.json
+make scenario-review-queue
 make lab-down
 ```
 
@@ -133,9 +134,15 @@ is included in the JSON evidence. The live verification does **not** start or
 delete a cluster, so the operator remains responsible for the dedicated lab. This is a **manual local**
 step (not performed by `make scenario-generate`). Only the fixed
 `kind-cka-dev` context is used. Do not run another lab concurrently.
-A reviewed, smoke-tested proposal must still be **manually promoted** to the
-tracked curated JSON bank by a human-reviewed PR; no command automatically
-publishes to the learner-facing API.
+Use `make scenario-review-queue` to list candidates that currently have
+matching offline-policy and Kubernetes verification evidence. A candidate is
+`needs-human-review` only when the complete evidence report belongs to the
+fixed `kind-cka-dev` context and its SHA-256 digest matches the current YAML.
+Modified, missing, new or invalid proposals require verification again. This
+is a **read-only operator command**: it neither approves nor publishes anything.
+The local verification file is not cryptographically signed and must be treated
+as trusted operator-local state. Human review and a separate Git PR remain
+mandatory before any scenario reaches students.
 
 Currently both AI providers support `deployment_scale` and `service_selector`
 only; the CPU-resource scenario is curated until its generator quality gates

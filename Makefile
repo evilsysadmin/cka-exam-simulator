@@ -12,7 +12,7 @@ PROPOSAL ?=
 OLLAMA_URL ?= http://127.0.0.1:11434
 export OLLAMA_URL
 
-.PHONY: help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-verify scenario-validate scenario-smoke scenario-check lab-up lab-down
+.PHONY: help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-verify scenario-review-queue scenario-validate scenario-smoke scenario-check lab-up lab-down
 
 help:
 	@printf '%s\n' \
@@ -23,6 +23,7 @@ help:
 	  'make scenario-audit                       Offline batch YAML + duplicate check' \
 	  'make scenario-batch                       Generate then audit; never auto-publish' \
 	  'make scenario-verify                      Live smoke of <=5 audited proposals in dedicated kind' \
+	  'make scenario-review-queue               Read-only verified proposals awaiting human review' \
 	  'make scenario-validate PROPOSAL=scenarios/generated/<slug>.yaml' \
 	  'make lab-up                               Create dedicated kind-cka-dev cluster manually' \
 	  'make scenario-smoke PROPOSAL=scenarios/generated/<slug>.yaml' \
@@ -53,6 +54,10 @@ scenario-batch: scenario-generate
 
 scenario-verify:
 	$(PYTHON) -m cka_sim verify-proposals
+
+
+scenario-review-queue:
+	$(PYTHON) -m cka_sim review-queue
 
 scenario-validate:
 	@test -n "$(PROPOSAL)" || { echo 'PROPOSAL=<path-to-generated-yaml> is required' >&2; exit 2; }

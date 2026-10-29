@@ -26,6 +26,7 @@ jobs:
           make -n scenario-audit
           make -n scenario-batch PROVIDER=workers-ai COUNT=2
           make -n scenario-verify
+          make -n scenario-review-queue
           make -n scenario-validate PROPOSAL=scenarios/generated/sample.yaml
           make -n scenario-smoke PROPOSAL=scenarios/generated/sample.yaml
 
@@ -90,6 +91,17 @@ jobs:
           assert report["passed"] and report["verified"] == 1
           assert report["requires_human_review"] is True
           assert report["entries"][0]["status"] == "needs-human-review"
+          assert not Path("scenarios/ci-generated-scale.json").exists()
+          PY
+      - name: Review verified proposal in read-only queue
+        run: |
+          python -m cka_sim review-queue > .local/review-queue.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          queue = json.loads(Path(".local/review-queue.json").read_text())
+          assert queue["ready"] == 1
+          assert queue["entries"][0]["status"] == "needs-human-review"
           assert not Path("scenarios/ci-generated-scale.json").exists()
           PY
       - name: Print cluster diagnostics if smoke fails
