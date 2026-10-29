@@ -12,7 +12,7 @@ PROPOSAL ?=
 OLLAMA_URL ?= http://127.0.0.1:11434
 export OLLAMA_URL
 
-.PHONY: help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-validate scenario-smoke scenario-check lab-up lab-down
+.PHONY: help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-validate scenario-smoke scenario-check lab-up lab-down
 
 help:
 	@printf '%s\n' \
@@ -20,6 +20,8 @@ help:
 	  'make ollama-pull                          Pull OLLAMA_MODEL=$(OLLAMA_MODEL)' \
 	  'make scenario-generate                    Generate proposals; local Ollama by default' \
 	  'make scenario-generate PROVIDER=workers-ai Generate via Cloudflare Workers AI (OCI A1)' \
+	  'make scenario-audit                       Offline batch YAML + duplicate check' \
+	  'make scenario-batch                       Generate then audit; never auto-publish' \
 	  'make scenario-validate PROPOSAL=scenarios/generated/<slug>.yaml' \
 	  'make lab-up                               Create dedicated kind-cka-dev cluster manually' \
 	  'make scenario-smoke PROPOSAL=scenarios/generated/<slug>.yaml' \
@@ -41,6 +43,12 @@ ollama-status:
 
 scenario-generate:
 	$(PYTHON) -m cka_sim generate --provider "$(PROVIDER)" --model "$(MODEL)" --type "$(TYPE)" --count "$(COUNT)" --output scenarios/generated
+
+scenario-audit:
+	$(PYTHON) -m cka_sim audit-proposals --directory scenarios/generated
+
+scenario-batch: scenario-generate
+	$(MAKE) scenario-audit
 
 scenario-validate:
 	@test -n "$(PROPOSAL)" || { echo 'PROPOSAL=<path-to-generated-yaml> is required' >&2; exit 2; }
