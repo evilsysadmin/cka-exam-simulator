@@ -5,6 +5,7 @@ on:
   pull_request:
 permissions:
   contents: read
+
 jobs:
   scenario-core:
     runs-on: ubuntu-latest
@@ -17,6 +18,7 @@ jobs:
       - run: python -m pip install -e '.[dev]'
       - run: python -m pytest
       - run: python -m cka_sim validate-bank
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -29,3 +31,41 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  kind-smoke:
+    name: Live Kubernetes scenario smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install scenario engine
+        run: python -m pip install -e '.[dev]'
+      - name: Install pinned kind and kubectl without creating a cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          install_only: true
+          version: v0.31.0
+          kubectl_version: v1.35.0
+      - name: Create dedicated ephemeral lab through our CLI
+        run: python -m cka_sim lab-up
+      - name: Prove both scenarios fail first and pass after reference fix
+        run: |
+          python -m cka_sim lab-smoke scale-payment-api
+          python -m cka_sim lab-smoke fix-catalog-service
+      - name: Print cluster diagnostics if smoke fails
+        if: failure()
+        run: |
+          if test -f .local/kubeconfig; then
+            kubectl --kubeconfig .local/kubeconfig --context kind-cka-dev get deployments,pods,services,endpointslices -A -o wide || true
+            kubectl --kubeconfig .local/kubeconfig --context kind-cka-dev get events -A --sort-by=.metadata.creationTimestamp | tail -80 || true
+          fi
+      - name: Delete ephemeral lab
+        if: always()
+        run: |
+          if command -v kind >/dev/null 2>&1; then
+            python -m cka_sim lab-down
+          fi
