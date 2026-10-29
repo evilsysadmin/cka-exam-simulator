@@ -25,7 +25,13 @@ def test_fixtures_are_fixed_and_namespaced(bank):
     for s in bank.values():
         docs = fixture_objects(s)
         assert [d["kind"] for d in docs] == ["Namespace", "Deployment", "Service"]
-        assert docs[1]["spec"]["template"]["spec"]["containers"][0]["image"] == "nginx:1.27-alpine"
+        container = docs[1]["spec"]["template"]["spec"]["containers"][0]
+        assert container["image"].startswith("ghcr.io/nginxinc/nginx-unprivileged:1.27-alpine@sha256:")
+        assert container["ports"][0]["containerPort"] == 8080
+        assert container["securityContext"]["runAsNonRoot"] is True
+        assert container["securityContext"]["runAsUser"] == 101
+        assert container["securityContext"]["capabilities"]["drop"] == ["ALL"]
+        assert docs[2]["spec"]["ports"][0] == {"port": 80, "targetPort": 8080}
         assert docs[2]["metadata"]["namespace"] == s.namespace
         assert "hostPath" not in render_yaml(s)
         assert "privileged" not in render_yaml(s)
