@@ -84,8 +84,29 @@ def verify_real_rbac(s, config: Path):
             args.append("--resource-name=" + resource_name)
         proc = subprocess.run(args, capture_output=True, text=True, timeout=25)
         if proc.returncode not in (0, 1) or proc.stdout.strip() not in ("yes", "no"):
-            raise AssertionError("Kubernetes RBAC SelfSubjectAccessReview failed")
+            category = ("unknown-option" if "unknown flag" in proc.stderr
+                        else "unauthorized" if "Unauthorized" in proc.stderr
+                        else "forbidden" if "Forbidden" in proc.stderr
+                        else "other-kubectl-error")
+            raise AssertionError(
+                f"RBAC SelfSubjectAccessReview failed: {verb} {resource} "
+                f"exit={proc.returncode} stdout={proc.stdout.strip()[:24]!r} "
+                f"category={category}"
+            )
         return proc.stdout.strip() == "yes"
+
+    # First ensure the actual bearer token can GET a named workload through
+    # Kubernetes, rather than trusting SelfSubjectAccessReview alone.
+    get_command = [
+        "kubectl", "--kubeconfig", str(config), "--context", CONTEXT,
+        "get", "deployment", s.deployment, "-n", s.namespace, "-o", "name",
+    ]
+    result = subprocess.run(get_command, capture_output=True, text=True, timeout=25)
+    if result.returncode != 0 or result.stdout.strip() != f"deployment.apps/{s.deployment}":
+        category = ("unauthorized" if "Unauthorized" in result.stderr
+                    else "forbidden" if "Forbidden" in result.stderr
+                    else "other-kubectl-error")
+        raise AssertionError(f"Scoped bearer token GET failed, category={category}")
 
     for verb, resource, name in [
         ("get", "deployments.apps", s.deployment),
