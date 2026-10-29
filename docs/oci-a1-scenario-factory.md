@@ -8,6 +8,44 @@ not provide authenticated CKA sessions, Kubernetes terminals, or user APIs.
 Do not enable the service until infrastructure ownership, staging secrets and
 a persistent data directory are explicitly provisioned and validated.
 
+## Normal installed Python wheel (separate from pinned scenarios)
+
+The factory no longer requires an editable source-linked Python installation.
+With a wheel built from the **same reviewed CKA commit** as the immutable source
+checkout, a future staging operator can install a normal distribution into a
+root-owned, read-only virtualenv. Set
+`CKA_SCENARIO_SOURCE_ROOT=/opt/shadowops/cka-factory-staging/source`
+to read the curated JSON bank from that separately pinned checkout. This
+must be an existing absolute directory without parent/scenarios symlinks;
+invalid values **fail closed**, never silently fall back to an empty bank.
+
+The two independent roots then have clear responsibilities:
+
+- **Executable code and Python dependencies:** the regular installed wheel
+  inside `/opt/shadowops/cka-factory-staging/venv/`, not an editable import hook.
+- **Curated reference scenarios:** the trusted, SHA-pinned **read-only**
+  `/opt/shadowops/cka-factory-staging/source/scenarios/` directory.
+- **Daily quota/locks and generated quarantine:** the separate private
+  `/var/lib/shadowops/cka-factory-staging/` workspace.
+
+Example for a *preprovisioned* staging host, **not an installation workflow**:
+
+```bash
+CKA_SCENARIO_SOURCE_ROOT=/opt/shadowops/cka-factory-staging/source \
+  /opt/shadowops/cka-factory-staging/venv/bin/python -I -m cka_sim validate-bank
+CKA_SCENARIO_SOURCE_ROOT=/opt/shadowops/cka-factory-staging/source \
+  /opt/shadowops/cka-factory-staging/venv/bin/python -I -m cka_sim factory-run \
+  --workspace /var/lib/shadowops/cka-factory-staging
+```
+
+The GitHub CI exercises a real noneditable pip install in a temporary venv
+with a separate source bank and a credential-free factory dry-run. This
+does NOT attest the external wheel or its transitive dependencies
+cryptographically; the Infra installer must separately validate the built
+wheel/installed module provenance before any host installation. The existing
+Infra staging installer still assumes a source-linked package and must be
+updated in a separate reviewed PR before using this wheel-based layout.
+
 ## Local staging preflight (no inference)
 
 Install the Python package, then from the CKA source root:

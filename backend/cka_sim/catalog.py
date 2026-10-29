@@ -1,12 +1,36 @@
 """Curated JSON bank and quarantined YAML proposals from untrusted LLMs."""
 import json
+import os
 from pathlib import Path
 
 import yaml
 from yaml.events import AliasEvent
 from .models import Scenario
 
-ROOT = Path(__file__).resolve().parents[2]
+def _source_root() -> Path:
+    """Resolve the readonly curated bank independently of an installed wheel.
+
+    For local editable development the source tree is still the default.
+    A hardened staging install explicitly pins its source checkout through
+    the environment; never resolve a missing/unsafe override by falling back
+    to the package directory or an empty scenario catalog.
+    """
+    configured = os.getenv("CKA_SCENARIO_SOURCE_ROOT")
+    if configured is None:
+        return Path(__file__).resolve().parents[2]
+    path = Path(configured)
+    if not path.is_absolute() or ".." in path.parts or not path.is_dir():
+        raise ValueError("CKA source root must be an existing absolute directory")
+    scenarios = path / "scenarios"
+    if any(candidate.is_symlink()
+           for candidate in (path, *path.parents, scenarios)):
+        raise ValueError("CKA source root must not traverse symlinks")
+    if not scenarios.is_dir():
+        raise ValueError("CKA source root must contain a scenarios directory")
+    return path
+
+
+ROOT = _source_root()
 BANK = ROOT / "scenarios"
 PROPOSALS = BANK / "generated"
 MAX_PROPOSAL_BYTES = 16_384

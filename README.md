@@ -195,6 +195,15 @@ make factory-plan COUNT=1 TYPE=deployment_scale    # no credentials, no AI calls
 make factory-execute COUNT=1 TYPE=deployment_scale # explicit paid inference
 ```
 
+A hardened staging runtime can now use a **noneditable installed wheel**:
+`CKA_SCENARIO_SOURCE_ROOT=/opt/shadowops/cka-factory-staging/source` points
+the wheel at the separate SHA-pinned, read-only curated JSON bank. The env path
+must be absolute, existing and free of symlink components; local development
+defaults remain unchanged. The application and its dependencies can therefore
+live inside a separate root-owned Python venv rather than relying on an
+editable import hook. The standalone staging installer must still be updated
+to verify artifact provenance for this layout before host adoption.
+
 The factory **never** invokes Ollama, Kubernetes or a public endpoint.
 For a hardened A1 staging service, `make factory-plan FACTORY_WORKSPACE=/var/lib/shadowops/cka-factory-staging`
 (and `make factory-execute FACTORY_WORKSPACE=...`) separates mutable state and

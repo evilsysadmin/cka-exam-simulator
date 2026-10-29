@@ -61,6 +61,39 @@ jobs:
               assert not (workspace / "scenarios/generated").exists()
               assert not Path("scenarios/generated").exists()
           PY
+      - name: Verify noneditable wheel with external readonly curated bank
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ''
+          CLOUDFLARE_API_TOKEN: ''
+          CKA_SCENARIO_PROVIDER: workers-ai
+        run: |
+          set -euo pipefail
+          python -m venv --copies "$RUNNER_TEMP/cka-wheel-runtime"
+          "$RUNNER_TEMP/cka-wheel-runtime/bin/python" -m pip install --disable-pip-version-check .
+          mkdir -p "$RUNNER_TEMP/cka-wheel-workspace"
+          export CKA_SCENARIO_SOURCE_ROOT="$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/cka-wheel-runtime/bin/python" -I -m cka_sim validate-bank
+          "$RUNNER_TEMP/cka-wheel-runtime/bin/python" -I -m cka_sim factory-run \
+            --workspace "$RUNNER_TEMP/cka-wheel-workspace" \
+            > "$RUNNER_TEMP/cka-wheel-plan.json"
+          "$RUNNER_TEMP/cka-wheel-runtime/bin/python" -I - <<'PY'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+          from cka_sim.catalog import ROOT, load_bank
+          runtime = Path(os.environ["RUNNER_TEMP"]) / "cka-wheel-runtime"
+          origin = Path(importlib.util.find_spec("cka_sim").origin).resolve()
+          assert origin.is_relative_to(runtime / "lib"), origin
+          assert ROOT == Path(os.environ["GITHUB_WORKSPACE"])
+          assert len(load_bank()) >= 3
+          plan = json.loads((Path(os.environ["RUNNER_TEMP"]) / "cka-wheel-plan.json").read_text())
+          assert plan["status"] == "dry-run" and plan["generated"] == []
+          workspace = Path(os.environ["RUNNER_TEMP"]) / "cka-wheel-workspace"
+          assert not (workspace / ".local/factory-budget.json").exists()
+          assert not (workspace / "scenarios/generated").exists()
+          assert not (ROOT / "scenarios/generated").exists()
+          PY
       - name: Verify Makefile commands are parseable without starting Docker
         run: |
           make -n ollama-up
