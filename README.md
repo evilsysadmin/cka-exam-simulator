@@ -21,6 +21,8 @@ Sample fix (in the browser console):
 - kubectl get deployments -n cka-payments
 - kubectl scale deployment/payment-api --replicas=3 -n cka-payments
 
+The local preview now uses an **in-process, server-authoritative monotonic timer**. Preparing a lab starts the clock only after fixture setup succeeds. Refreshing the browser resumes the current scenario and its remaining time; terminal commands are rejected when time expires, while checking the final grade remains available. Preparing another scenario starts a new attempt. This intentionally supports **one local developer session per API process only**: server restarts forget the timer, and this is not a substitute for authenticated, persistent, per-user sessions in the future isolated runner.
+
 The browser console is **restricted kubectl**, not a full shell. It only targets the dedicated kind-cka-dev Kubernetes context. Requests to the local developer API require a specific header and a loopback peer, but this is NOT production authentication.
 
 ## Validate scenario design

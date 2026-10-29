@@ -17,6 +17,12 @@ type Grade = {
   checks: { name: string; passed: boolean }[]
 }
 type Phase = 'idle' | 'preparing' | 'active' | 'expired'
+type LocalSession = {
+  scenario_slug: string
+  phase: 'active' | 'expired'
+  remaining_seconds: number
+  expires_at: string
+}
 const HEADER = { 'X-CKA-Lab-Request': '1' }
 
 async function post<T>(path: string, payload?: object): Promise<T> {
@@ -33,6 +39,17 @@ async function post<T>(path: string, payload?: object): Promise<T> {
     throw new Error(message)
   }
   return response.json() as Promise<T>
+}
+
+async function fetchLocalSession(): Promise<LocalSession | null> {
+  const response = await fetch('/api/dev/session', {
+    headers: HEADER,
+    cache: 'no-store',
+  })
+  // This endpoint is intentionally unavailable on the public static preview.
+  if (!response.ok) return null
+  const data = await response.json() as { session: LocalSession | null }
+  return data.session
 }
 
 function prettyTime(seconds: number) {
@@ -52,6 +69,13 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [grading, setGrading] = useState(false)
 
+  function restoreSession(session: LocalSession) {
+    setSelectedSlug(session.scenario_slug)
+    setRemaining(session.remaining_seconds)
+    setDeadline(Date.now() + session.remaining_seconds * 1000)
+    setPhase(session.phase)
+  }
+
   useEffect(() => {
     let alive = true
     fetch('/api/scenarios')
@@ -59,10 +83,18 @@ export default function App() {
         if (!r.ok) throw new Error('API unavailable (HTTP ' + r.status + ')')
         return r.json() as Promise<Scenario[]>
       })
-      .then((data) => {
+      .then(async (data) => {
         if (!alive) return
         setScenarios(data)
         if (data.length) setSelectedSlug(data[0].slug)
+        try {
+          const session = await fetchLocalSession()
+          if (alive && session && data.some((s) => s.slug === session.scenario_slug)) {
+            restoreSession(session)
+          }
+        } catch {
+          // Local lab not running: the public scenario bank remains usable.
+        }
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : 'Unable to load scenarios')
@@ -96,11 +128,10 @@ export default function App() {
     setDeadline(null)
     setRemaining(null)
     try {
-      await post('/api/dev/scenarios/' + current.slug + '/setup')
-      const until = Date.now() + current.minutes * 60_000
-      setDeadline(until)
-      setRemaining(current.minutes * 60)
-      setPhase('active')
+      const prepared = await post<{ session: LocalSession }>(
+        '/api/dev/scenarios/' + current.slug + '/setup',
+      )
+      restoreSession(prepared.session)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not prepare lab')
       setPhase('idle')
@@ -208,10 +239,13 @@ export default function App() {
                 </div>
 
                 <div className="console-area">
-                  {phase === 'active' || phase === 'expired'
+                  {phase === 'active'
                     ? <TerminalPanel key={current.slug} scenario={current.slug} onCommand={runCommand} />
                     : <div className="console-empty"><span className="console-placeholder">&gt;_</span>
-                        <strong>Lab environment is on standby</strong><small>Prepare the scenario to activate the console.</small>
+                        <strong>{phase === 'expired' ? 'Exam time is up' : 'Lab environment is on standby'}</strong>
+                        <small>{phase === 'expired'
+                          ? 'Terminal commands are locked. You can still check the result or prepare a new attempt.'
+                          : 'Prepare the scenario to activate the console.'}</small>
                       </div>}
                 </div>
 
