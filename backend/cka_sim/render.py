@@ -2,7 +2,7 @@
 import yaml
 from .models import Scenario
 
-IMAGE = "nginx:1.27-alpine"
+IMAGE = "ghcr.io/nginxinc/nginx-unprivileged:1.27-alpine@sha256:e234d4f7e346c098f7b22245690372382aded5be988611eb2c53ae62231eece7"
 
 
 def fixture_objects(s: Scenario) -> list[dict]:
@@ -14,8 +14,9 @@ def fixture_objects(s: Scenario) -> list[dict]:
                 "replicas": s.initial_replicas,
                 "selector": {"matchLabels": labels},
                 "template": {"metadata": {"labels": labels}, "spec": {"containers": [{
-                    "name": "web", "image": IMAGE, "ports": [{"containerPort": 80}],
+                    "name": "web", "image": IMAGE, "ports": [{"containerPort": 8080}],
                     "securityContext": {"allowPrivilegeEscalation": False,
+                                        "runAsNonRoot": True, "runAsUser": 101, "runAsGroup": 101,
                                         "capabilities": {"drop": ["ALL"]}},
                     "resources": {"requests": {"cpu": "10m", "memory": "32Mi"},
                                   "limits": {"cpu": "250m", "memory": "128Mi"}},
@@ -23,7 +24,7 @@ def fixture_objects(s: Scenario) -> list[dict]:
         {"apiVersion": "v1", "kind": "Service", "metadata": {
             "name": s.service, "namespace": s.namespace}, "spec": {
                 "selector": {"app": s.initial_selector},
-                "ports": [{"port": 80, "targetPort": 80}],
+                "ports": [{"port": 80, "targetPort": 8080}],
             }},
     ]
 
