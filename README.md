@@ -14,6 +14,14 @@ For now, the standalone ShadowOps Identity runtime has **no app-token issuance**
 
 Run `python -m pytest backend/tests/test_identity_poc.py`. Next gates: audited real staging Identity app-token issuer/session revocation, consumer token/session binding, approved JWKS rotation and secure distribution, local login round trip, and isolated per-user Kubernetes runner/quotas/TTL before publicly enabling labs.
 
+### Cross-repository Go Identity → CKA cryptographic handshake (CI-only)
+
+The independent `.github/workflows/identity-contract.yml` gate checks out **`evilsysadmin/shadowops-infra` at exact reviewed commit `d51f6c43ab430f2c0c5b2b5ee83f2c6c0da301e3`**, rather than trusting a moving branch or downloading arbitrary JWKS from a browser. In an isolated CI job, `scripts/identity_go_contract_fixture.go` creates a new random Ed25519 seed, builds the **actual ShadowOps Identity Go `core.New("staging", seed)` JWKS and issuer**, and **synthetically signs** a CKA-audience JWT with the corresponding ephemeral key for interoperability testing only. The signer script is **not** part of the IdP API or the simulator runtime, and does not provide real user authentication. Its short-lived, synthetic UUID subject is never a registered account or a Kubernetes permission.
+
+The Python `backend/tests/test_identity_crossrepo_contract.py` verifies that CKA accepts a correctly signed `aud=cka-simulator` token against that real Identity Go public-key encoding and rejects `core.ProbeToken`, wrong issuer, wrong audience, expired, future and mismatched `kid` tokens. Synthetic tokens and public keys are written only under the ephemeral GitHub Actions runner temp directory with file mode 0600 and removed after the job; the seed itself is never exported. No real private keys, users, databases, network IdP, product session or lab resources are accessed.
+
+**This is a cryptographic interoperability PoC, not a completed CKA login.** The standalone Identity service still cannot mint a live, session-bound CKA user token and stays `/readyz=503`. Any future Identity core changes must deliberately update the pinned SHA and rerun this contract. A proper login requires verified user enrollment, token issuance bound to an authenticated session, revocation checks and safe JWKS distribution; real CKA labs additionally require isolated per-user runners, quotas, TTL and authorization.
+
 ## Developer-only local preview
 
 Not safe for public hosting: no authentication, tenant isolation, quotas, persistent multi-user sessions or production-grade terminal yet. Do not publish these endpoints or expose localhost via an internet proxy.
