@@ -13,7 +13,6 @@ from typing import Callable
 
 from .identity_poc import (
     STAGING_ISSUER,
-    IdentityPoCError,
     _decode,
     _json_object,
     _reject,
