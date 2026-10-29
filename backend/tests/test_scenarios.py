@@ -34,7 +34,7 @@ def test_fixtures_are_fixed_and_namespaced(bank):
         assert docs[2]["spec"]["ports"][0] == {"port": 80, "targetPort": 8080}
         assert docs[2]["metadata"]["namespace"] == s.namespace
         assert "hostPath" not in render_yaml(s)
-        assert "privileged" not in render_yaml(s)
+        assert container["securityContext"].get("privileged") is not True
 
 
 @pytest.mark.parametrize("field,value", [
