@@ -60,7 +60,7 @@ never implies that an exercise is safe, correct or publicly available.
 
 ## Staging adoption checklist
 
-1. Infra issue #9: stage restricted Cloudflare Worker AI token / account ID
+1. CKA repo issue #9: stage restricted Cloudflare Workers AI token / account ID
    as **backend secrets**, not the Pages publisher credentials by assumption.
 2. Provision an isolated OCI process account, writable persistent quarantine,
    private `.local` state, explicit single-run dispatch, outbound HTTPS and
