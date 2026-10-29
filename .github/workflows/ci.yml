@@ -27,6 +27,7 @@ jobs:
           make -n scenario-batch PROVIDER=workers-ai COUNT=2
           make -n scenario-verify
           make -n scenario-review-queue
+          make -n scenario-prepare-review SLUG=example SHA256=placeholder REVIEWER=operator
           make -n scenario-validate PROPOSAL=scenarios/generated/sample.yaml
           make -n scenario-smoke PROPOSAL=scenarios/generated/sample.yaml
 
