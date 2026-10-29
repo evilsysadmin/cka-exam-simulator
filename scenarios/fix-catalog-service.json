@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "slug": "fix-catalog-service",
+  "title": "Servicio de catálogo sin backends",
+  "story": "La API de catálogo está desplegada y sus pods parecen sanos, pero el servicio frontal no encuentra destinos válidos.",
+  "difficulty": "medium",
+  "minutes": 9,
+  "namespace": "cka-catalog",
+  "deployment": "catalog-api",
+  "scenario_type": "service_selector",
+  "initial_replicas": 2,
+  "target_replicas": 2,
+  "initial_selector": "catalog-legacy",
+  "target_selector": "catalog-api"
+}
