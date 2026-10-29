@@ -2,6 +2,8 @@ package observe
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"errors"
 	"net/url"
 	"os"
@@ -190,3 +192,51 @@ func TestNormalizeUnstructuredJSONNumbers(t *testing.T){
 	if err!=nil { t.Fatal(err) }
 	if got["spec"].(map[string]any)["replicas"]!=float64(3){t.Fatalf("unexpected number type: %T",got["spec"].(map[string]any)["replicas"])}
 }
+
+func scopedTestConfig(namespace, subject string) *api.Config {
+	cfg := trustedConfig()
+	claims := base64.RawURLEncoding.EncodeToString([]byte(
+		fmt.Sprintf("{%q:%q}", "sub", subject)))
+	cfg.Contexts[Context].Namespace = namespace
+	cfg.AuthInfos[Context] = &api.AuthInfo{Token: "header." + claims + ".signature"}
+	return cfg
+}
+
+func TestScopedTokenRequiresExactServiceAccountAndNamespace(t *testing.T) {
+	ns := "cka-payments"
+	sub := "system:serviceaccount:" + ns + ":" + ObserverAccount
+	cases := map[string]func(*api.Config){
+		"missing token": func(c *api.Config) { c.AuthInfos[Context].Token = "" },
+		"admin token": func(c *api.Config) { c.AuthInfos[Context].Token = "fake.admin.token" },
+		"wrong SA": func(c *api.Config) { c.AuthInfos[Context] = scopedTestConfig(ns, "system:serviceaccount:"+ns+":default").AuthInfos[Context] },
+		"wrong namespace in token": func(c *api.Config) { c.AuthInfos[Context] = scopedTestConfig(ns, "system:serviceaccount:cka-other:"+ObserverAccount).AuthInfos[Context] },
+		"wrong namespace in context": func(c *api.Config) { c.Contexts[Context].Namespace = "cka-other" },
+		"embedded admin certificate": func(c *api.Config) { c.AuthInfos[Context].ClientCertificateData = []byte("admin-cert") },
+		"token file": func(c *api.Config) { c.AuthInfos[Context].TokenFile = "/tmp/exfil" },
+		"exec credential helper": func(c *api.Config) { c.AuthInfos[Context].Exec = &api.ExecConfig{Command: "sh"} },
+		"remote API endpoint": func(c *api.Config) { c.Clusters[Context].Server = "https://203.0.113.1:6443" },
+		"extra context": func(c *api.Config) { c.Contexts["production"] = &api.Context{} },
+	}
+	valid := scopedTestConfig(ns, sub)
+	if err := validateForNamespace(valid, ns); err != nil { t.Fatalf("scoped token rejected: %v", err) }
+	if err := validate(valid); err == nil { t.Fatal("privileged developer config gate accepted scoped token") }
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			config := scopedTestConfig(ns, sub)
+			change(config)
+			if err := validateForNamespace(config, ns); err == nil {
+				t.Fatal("unsafe scoped credentials accepted")
+			}
+		})
+	}
+	for _, ns := range []string{"default", "kube-system", "cka-../bad", "cka-", ""} {
+		if _, err := LoadScopedLocalConfig("/nonexistent", ns); err == nil {
+			t.Errorf("invalid namespace %q accepted", ns)
+		}
+	}
+	if _, err := LoadScopedLocalConfig("/tmp/relative", "cka-payments"); err == nil {
+		// A non-existent credential path must fail before attempting any default credentials.
+		t.Fatal("missing kubeconfig accepted")
+	}
+}
+

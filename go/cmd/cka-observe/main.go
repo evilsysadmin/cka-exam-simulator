@@ -34,7 +34,7 @@ func main() {
 	if !ok {
 		fail()
 	}
-	cfg, err := observe.LoadLocalConfig(*kubeconfig)
+	cfg, err := observe.LoadScopedLocalConfig(*kubeconfig, s.Namespace)
 	if err != nil {
 		fail()
 	}
