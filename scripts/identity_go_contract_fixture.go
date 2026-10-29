@@ -37,6 +37,7 @@ type fixture struct {
 	WrongIssuer   string          `json:"wrong_issuer"`
 	Expired       string          `json:"expired"`
 	Future        string          `json:"future"`
+	SessionBound  string          `json:"session_bound"`
 }
 
 func sign(priv ed25519.PrivateKey, kid string, body claims) (string, error) {
@@ -119,6 +120,10 @@ func run() error {
 	v = base
 	v.Iat, v.Nbf, v.Exp = epoch+3600, epoch+3600, epoch+3900
 	result.Future, err = makeToken(v)
+	if err != nil {
+		return err
+	}
+	result.SessionBound, err = sessionBoundVector(seed, publicJWKS)
 	if err != nil {
 		return err
 	}
