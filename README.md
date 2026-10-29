@@ -4,7 +4,7 @@ An experimental **hands-on** Kubernetes CKA simulator with browser-based develop
 
 ## Developer-only local preview
 
-Not safe for public hosting: no authentication, tenant isolation, quotas, backend exam clock or production-grade terminal yet. Do not publish these endpoints or expose localhost via an internet proxy.
+Not safe for public hosting: no authentication, tenant isolation, quotas, persistent multi-user sessions or production-grade terminal yet. Do not publish these endpoints or expose localhost via an internet proxy.
 
 Requirements: Python 3.11+, Node 20+, npm, Docker Engine, kind, kubectl (native packages or source); Ollama optional.
 
@@ -39,16 +39,88 @@ the new Deployment rollout is observed and all replicas are available.
 Ollama generation remains limited to the two previously supported proposal types;
 the new scenario is curated and must pass the same live kind acceptance gate. The image nginx:1.27-alpine must be pullable (or preloaded).
 
-## Ollama proposal generation
+## Dual-provider scenario factory: Ollama locally, Workers AI on OCI A1
 
-- python -m cka_sim generate --model YOUR_LOCAL_MODEL --type deployment_scale
-- python -m cka_sim generate --model YOUR_LOCAL_MODEL --type service_selector
+Dependencies: Python backend installed with `python -m pip install -e '.[dev]'`
+and GNU Make. Local Ollama also requires Docker Engine with the `docker compose`
+plugin. Remote Workers AI **does not** require Docker, Ollama or a GPU on the OCI A1.
+This factory runs operationally from the backend/CLI; it does **not** start a
+public runner, SSO, or user-accessible Kubernetes endpoint.
 
-The LLM writes only schema-validated proposals under scenarios/generated. It cannot supply code, arbitrary manifests, Kubernetes commands or graders. Proposals **must never be automatically promoted**: real-cluster smoke, policy review and approval are still required.
+```bash
+make ollama-up
+make ollama-pull                           # OLLAMA_MODEL=qwen2.5:7b-instruct (~4.7 GB)
+make scenario-generate TYPE=deployment_scale COUNT=3
+make scenario-generate TYPE=service_selector MODEL=qwen2.5:7b-instruct
+make scenario-validate PROPOSAL=scenarios/generated/<generated-slug>.yaml
+```
+
+For **OCI A1 / remote generation**, configure these secrets in the backend's
+runtime secret configuration (to be wired into the OCI deployment), never in source code,
+Compose files, frontend bundles, logs or GitHub actions:
+
+```bash
+# Provide securely to the backend process:
+# CKA_SCENARIO_PROVIDER=workers-ai
+# CLOUDFLARE_ACCOUNT_ID=<account-id>
+# CLOUDFLARE_API_TOKEN=<restricted Workers AI token>
+make scenario-generate PROVIDER=workers-ai TYPE=deployment_scale COUNT=3
+```
+
+Workers AI inference calls Cloudflare's fixed REST API endpoint over HTTPS,
+using an account-scoped API token with **Workers AI Read** permission and
+JSON Schema structured output. The default approved model is
+`@cf/meta/llama-3.3-70b-instruct-fp8-fast`; alternative models must be
+in the JSON Mode allowlist and verified before deployment. The model is
+**never** invoked by a browser or the student-facing exam API, and the token
+stays server-side. Configure outbound egress and generation quotas separately
+in OCI. The inference provider is selected with `--provider` or the
+`CKA_SCENARIO_PROVIDER` environment variable. CLI and Make share the
+same schema, quarantine and grading policy regardless of provider.
+
+For **local Ollama**, the container listens on host **127.0.0.1:11434 only** and keeps its
+models in a Docker volume; `make ollama-down` stops it without deleting the
+downloads. Use `make ollama-pull OLLAMA_MODEL=qwen2.5:1.5b-instruct` and then
+`make scenario-generate MODEL=qwen2.5:1.5b-instruct` for a smaller CPU model. Only a
+single model is loaded at a time. Native Ollama installed locally also works;
+the generator only accepts a loopback URL via `OLLAMA_URL`.
+
+Both providers are asked for **JSON constrained by the same Pydantic JSON
+Schema**, never raw YAML, Kubernetes manifests, scripts or graders. Cloudflare
+Workers AI supports `response_format.type=json_schema`; Ollama uses
+`format=<schema>`. Our deterministic Python code
+revalidates its DSL and writes `scenarios/generated/*.yaml` using `safe_dump`.
+The YAML reader rejects duplicate keys, custom tags, aliases, oversized files,
+unknown schema fields, unsafe names and collisions with curated scenarios.
+`make scenario-validate` checks **structure and policy only**; it does not
+guarantee a working Kubernetes scenario.
+
+To test a proposal in a real disposable cluster, intentionally run:
+
+```bash
+make lab-up
+make scenario-smoke PROPOSAL=scenarios/generated/<generated-slug>.yaml
+make lab-down
+```
+
+The smoke test reuses **trusted fixture templates and deterministic graders**,
+proves the initial state fails, applies the canonical repair and waits for the
+graded result to pass, then cleans the namespace. This is a **manual local**
+step (not performed by `make scenario-generate`). Only the fixed
+`kind-cka-dev` context is used. Do not run another lab concurrently.
+A reviewed, smoke-tested proposal must still be **manually promoted** to the
+tracked curated JSON bank by a human-reviewed PR; no command automatically
+publishes to the learner-facing API.
+
+Currently both AI providers support `deployment_scale` and `service_selector`
+only; the CPU-resource scenario is curated until its generator quality gates
+are extended. `COUNT` is limited to 1–20 per invocation. Partial batches can
+remain quarantined if later generated outputs fail. Never expose local Ollama
+or developer Kubernetes endpoints to the Internet.
 
 ## Roadmap
 
 1. Reliable VM-backed per-user ephemeral runner, auth, quotas and isolation.
 2. Real PTY browser shell instead of restricted kubectl, plus exam sessions with authoritative server clock.
-3. LLM model evaluation and automated acceptance pipeline with explicit human publication gate.
+3. Automated batch quality evaluation (novelty, repeated namespace/slug detection, actual live smoke) and explicit human publication gate.
 4. Expanded CKA domains and official blueprint mapping.
