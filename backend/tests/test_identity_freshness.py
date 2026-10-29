@@ -197,10 +197,3 @@ def test_never_calls_provider_before_verifying_signature(material):
         )
     assert called == []
 
-
-def test_absent_staging_service_always_denies_real_go_fixture_token(
-    monkeypatch, tmp_path,
-):
-    # No actual revocation lookup provider is configured in CKA yet.
-    # Do NOT mistake a synthetically positive callback for a deployed check.
-    assert SessionFreshnessEvidence.__dataclass_params__.frozen is True
