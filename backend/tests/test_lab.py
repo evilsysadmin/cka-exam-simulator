@@ -86,3 +86,22 @@ def test_missing_deployment_is_a_failed_solution_not_outage(monkeypatch):
         raise kube.LabError('Error from server (NotFound): deployments.apps "payment-api" not found')
     monkeypatch.setattr(kube, "kubectl", missing)
     assert kube.grade(s)["passed"] is False
+
+
+def test_smoke_diagnostics_preserve_pod_events_before_cleanup(monkeypatch, capsys):
+    from cka_sim import __main__ as cli
+    seen = []
+
+    def fake_kubectl(args):
+        seen.append(args)
+        if args[0] == "describe":
+            raise kube.LabError("temporary describe failure")
+        return "diagnostic-output"
+
+    monkeypatch.setattr(cli, "kubectl", fake_kubectl)
+    cli._diagnose_smoke_failure("cka-payments")
+    stderr = capsys.readouterr().err
+    assert "diagnostic-output" in stderr
+    assert "temporary describe failure" in stderr
+    assert all("-n" in args and "cka-payments" in args for args in seen)
+    assert len(seen) == 3
