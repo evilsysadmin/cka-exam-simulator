@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/identity-contract.yml'
       - 'scripts/identity_go_contract_fixture.go'
+      - 'scripts/identity_go_session_fixture.go'
       - 'backend/cka_sim/identity_poc.py'
       - 'backend/tests/test_identity_crossrepo_contract.py'
       - 'backend/tests/test_identity_poc.py'
@@ -13,6 +14,7 @@ on:
     paths:
       - '.github/workflows/identity-contract.yml'
       - 'scripts/identity_go_contract_fixture.go'
+      - 'scripts/identity_go_session_fixture.go'
       - 'backend/cka_sim/identity_poc.py'
       - 'backend/tests/test_identity_crossrepo_contract.py'
       - 'backend/tests/test_identity_poc.py'
@@ -32,7 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: evilsysadmin/shadowops-infra
-          ref: d51f6c43ab430f2c0c5b2b5ee83f2c6c0da301e3
+          ref: 41e26d71a9ee5f0a2399fbd999f55ea81cc60648
           path: .identity-contract-ref
           persist-credentials: false
       - uses: actions/setup-go@v6
@@ -46,20 +48,53 @@ jobs:
       - name: Check Go contract fixture formatting
         run: |
           set -euo pipefail
-          files="$(gofmt -l scripts/identity_go_contract_fixture.go)"
+          files="$(gofmt -l scripts/identity_go_contract_fixture.go scripts/identity_go_session_fixture.go)"
           if [[ -n "$files" ]]; then
-            gofmt -d scripts/identity_go_contract_fixture.go
+            gofmt -d scripts/identity_go_contract_fixture.go scripts/identity_go_session_fixture.go
             exit 1
           fi
+      - name: Start disposable loopback-only MongoDB 7 replica set
+        run: |
+          set -euo pipefail
+          docker run -d --name cka-identity-mongo --network host mongo:7.0 \
+            --replSet identity-rs --bind_ip 127.0.0.1 --port 27018
+          for i in {1..45}; do
+            if docker exec cka-identity-mongo mongosh --quiet \
+              'mongodb://127.0.0.1:27018/?directConnection=true' \
+              --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then
+              break
+            fi
+            if [[ "$i" == 45 ]]; then
+              docker logs cka-identity-mongo --tail 60
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec cka-identity-mongo mongosh --quiet \
+            'mongodb://127.0.0.1:27018/?directConnection=true' \
+            --eval 'rs.initiate({_id:"identity-rs", members:[{_id:0, host:"127.0.0.1:27018"}]})'
+          for i in {1..45}; do
+            if docker exec cka-identity-mongo mongosh --quiet \
+              'mongodb://127.0.0.1:27018/?directConnection=true' \
+              --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then
+              break
+            fi
+            if [[ "$i" == 45 ]]; then
+              docker logs cka-identity-mongo --tail 60
+              exit 1
+            fi
+            sleep 1
+          done
       - name: Sign synthetic CKA contract with Identity Go core and random CI-only seed
         env:
           CKA_IDENTITY_CONTRACT_FIXTURE_FILE: ${{ runner.temp }}/cka-identity-contract.json
+          CKA_IDENTITY_MONGO_REPLICA_TEST_URL: mongodb://127.0.0.1:27018/?replicaSet=identity-rs&directConnection=true
         run: |
           set -euo pipefail
           test ! -e "$CKA_IDENTITY_CONTRACT_FIXTURE_FILE"
           (
             cd .identity-contract-ref/services/identity
-            go run ../../../scripts/identity_go_contract_fixture.go
+            go run ../../../scripts/identity_go_contract_fixture.go ../../../scripts/identity_go_session_fixture.go
           )
           test -s "$CKA_IDENTITY_CONTRACT_FIXTURE_FILE"
       - name: Install CKA consumer verifier and run Go/Python interoperability
@@ -69,6 +104,9 @@ jobs:
           set -euo pipefail
           python -m pip install -e '.[dev]'
           python -m pytest backend/tests/test_identity_crossrepo_contract.py backend/tests/test_identity_poc.py
+      - name: Destroy disposable Identity MongoDB fixture
+        if: always()
+        run: docker rm -f cka-identity-mongo || true
       - name: Remove transient synthetic token vectors
         if: always()
         env:
