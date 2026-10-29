@@ -11,6 +11,7 @@ from .kube import LabError, cleanup, create_lab, delete_lab, grade, kubectl, set
 from .ollama import GenerationError
 from .providers import SUPPORTED_PROVIDERS, default_model, generate
 from .quality import audit_proposals
+from .verification import save_report, verify_batch
 
 
 
@@ -28,7 +29,7 @@ def _diagnose_smoke_failure(namespace: str) -> None:
             print(f"Unable to inspect {args[0]}: {exc}", file=sys.stderr)
 
 
-def _smoke_scenario(s) -> None:
+def _smoke_scenario(s, *, quiet: bool = False) -> None:
     try:
         setup(s)
         before = grade(s)
@@ -38,7 +39,8 @@ def _smoke_scenario(s) -> None:
         for _ in range(30):
             after = grade(s)
             if after["passed"]:
-                print(f"PASS: {s.slug} starts broken and can be solved")
+                if not quiet:
+                    print(f"PASS: {s.slug} starts broken and can be solved")
                 break
             time.sleep(3)
         else:
@@ -56,6 +58,7 @@ def main() -> None:
     commands.add_parser("validate-bank")
     auditor = commands.add_parser("audit-proposals")
     auditor.add_argument("--directory", type=Path, default=PROPOSALS)
+    commands.add_parser("verify-proposals")
     generator = commands.add_parser("generate")
     generator.add_argument("--provider", choices=SUPPORTED_PROVIDERS,
                            default=os.getenv("CKA_SCENARIO_PROVIDER", "ollama"))
@@ -84,6 +87,14 @@ def main() -> None:
             result = audit_proposals(args.directory)
             print(json.dumps(result, indent=2, ensure_ascii=False))
             if not result["passed"]:
+                raise SystemExit(1)
+        elif args.command == "verify-proposals":
+            report = verify_batch(smoke=lambda s: _smoke_scenario(s, quiet=True))
+            save_report(report)
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            print("Local verification evidence: .local/proposal-verification.json",
+                  file=sys.stderr)
+            if not report["passed"]:
                 raise SystemExit(1)
         elif args.command == "generate":
             if not 1 <= args.count <= 20:
