@@ -184,7 +184,7 @@ func TestFinishQueuesCleanupWithoutDeletingResources(t *testing.T) {
 func TestRejectInvalidOwnerScenarioEntropyAndCapacity(t *testing.T) {
 	store, _ := clockStore()
 	s := curated(t)
-	for _, owner := range []string{"", "not-a-uuid", strings.ToUpper(alice),
+	for _, owner := range []string{"", "not-a-uuid", strings.ToUpper("abcdefab-1234-4abc-8abc-abcdefabcdef"),
 		"11111111-1111-1111-8111-111111111111"} {
 		if _, err := store.Start(owner, s); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("invalid owner %q accepted: %v", owner, err)
