@@ -176,6 +176,47 @@ per-user resource limits or production-safe RBAC provisioner has been
 deployed. Never reuse the kind control-plane administrator certificate
 for user-facing operations. No OCI or Workers AI inference occurs.
 
+## Milestone 6: internal Go exam-session lease lifecycle (no HTTP or Kubernetes mutations)
+
+A new internal `go/internal/examsession` memory store implements a bounded
+session state machine: **active → expired/closed → cleanup pending → confirmed
+cleanup**. It is only a deterministic foundation for a future controller,
+not a user-login endpoint, not an Identity authorization service, and not a
+durable database.
+
+A trusted caller must supply a **currently authenticated and authorized,
+canonical UUIDv4 subject** (the store only checks UUID syntax; it does NOT
+verify tokens or current session-version/revocation status). `Start` atomically
+enforces one outstanding lease per owner, a fixed 256-entry cap, validated
+curated exercise duration and CSPRNG-generated independent session IDs and
+namespaces. Every candidate receives a separate `cka-lab-<random>`
+namespace rather than the static namespace from the curated bank; the
+associated scenario is copied and revalidated with that new namespace.
+The original curated exercise is never modified.
+
+`Status`, `ActiveScenario` and `Finish` require matching owner and
+session ID; foreign/unknown IDs return an indistinguishable denial.
+Deadlines use Go's monotonic clock where available, expiry prevents
+further access, and **expired or finished leases continue occupying their
+owner slot until the trusted reaper has independently verified removal of
+all namespace resources** and calls `ConfirmCleanup` with both the exact
+lease ID and namespace. `CleanupPending` only reports outstanding cleanup;
+it does not delete resources, mint tokens, or perform network operations.
+The narrow owner-visible `View` JSON omits namespace, internal scenario
+fields and credentials.
+
+Go's race-enabled CI covers session ownership, expiration boundaries,
+repeated cleanup, failed entropy, global capacity, random namespace
+uniqueness and concurrent attempts for one/many owners.
+
+**Not yet safe for production:** Memory state is lost if the process
+restarts; no durable lease journal, cleanup retry engine, reservation
+recovery, per-tenant quotas, real Identity revocation/freshness enforcement,
+Kubernetes provisioner or user-facing API exists. Do not wire these methods
+to the public HTTP server before those independent gates are verified.
+A validated JWT signature alone **does not authorize** opening a lab, even
+if it contains a UUID matching the required input type.
+
 ## Staged migration contract
 
 1. **Now:** Go reads and validates curated JSON in parallel with Python.
@@ -190,9 +231,14 @@ for user-facing operations. No OCI or Workers AI inference occurs.
    token** tested in the fixed kind-cka-dev cluster. Next: an isolated,
    authenticated multi-user lab controller and admission controls. Do not
    treat the local-kind role bootstrap as production provisioning.
-4. Port the operator-only Workers AI scenario factory, quarantine, budget
+4. **Foundation only:** Internal owner-bound Go session leases, independent
+   randomly allocated namespaces, TTL and cleanup acknowledgements are
+   covered by race-enabled tests. Next: durable session state, authenticated
+   Identity revocation checks, and trusted Kubernetes cleanup/provisioning.
+   Do not treat the in-memory package as a production controller.
+5. Port the operator-only Workers AI scenario factory, quarantine, budget
    and review gates to Go, preserving the no-auto-publication rule.
-5. Only once equivalent integration and live-kind acceptance are green,
+6. Only once equivalent integration and live-kind acceptance are green,
    review the OCI staging service as a Go ARM64 executable instead of the
    Python venv. This requires a *separate* ShadowOps Infra deployment PR.
    Keep a reversible transition; **do not activate both factories**.
