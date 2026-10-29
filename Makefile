@@ -15,7 +15,7 @@ REVIEWER ?=
 OLLAMA_URL ?= http://127.0.0.1:11434
 export OLLAMA_URL
 
-.PHONY: help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-verify scenario-review-queue scenario-prepare-review scenario-pr-bundle scenario-smoke-all scenario-validate scenario-smoke scenario-check lab-up lab-down
+.PHONY: factory-plan factory-execute help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-verify scenario-review-queue scenario-prepare-review scenario-pr-bundle scenario-smoke-all scenario-validate scenario-smoke scenario-check lab-up lab-down
 
 help:
 	@printf '%s\n' \
@@ -25,6 +25,8 @@ help:
 	  'make scenario-generate PROVIDER=workers-ai Generate via Cloudflare Workers AI (OCI A1)' \
 	  'make scenario-audit                       Offline batch YAML + duplicate check' \
 	  'make scenario-batch                       Generate then audit; never auto-publish' \
+	  'make factory-plan                         Offline OCI A1 Workers AI preflight (no charge)' \
+	  'make factory-execute COUNT=1              Explicit bounded OCI A1 Workers AI generation' \
 	  'make scenario-verify                      Live smoke of <=5 audited proposals in dedicated kind' \
 	  'make scenario-review-queue               Read-only verified proposals awaiting human review' \
 	  'make scenario-prepare-review             Explicit private draft; requires SLUG SHA256 REVIEWER' \
@@ -48,6 +50,12 @@ ollama-pull: ollama-up
 
 ollama-status:
 	$(COMPOSE) exec -T ollama ollama list
+
+factory-plan:
+	$(PYTHON) -m cka_sim factory-run --count "$(COUNT)" --type "$(TYPE)" --model "$(CF_AI_MODEL)"
+
+factory-execute:
+	$(PYTHON) -m cka_sim factory-run --execute --count "$(COUNT)" --type "$(TYPE)" --model "$(CF_AI_MODEL)"
 
 scenario-generate:
 	$(PYTHON) -m cka_sim generate --provider "$(PROVIDER)" --model "$(MODEL)" --type "$(TYPE)" --count "$(COUNT)" --output scenarios/generated
