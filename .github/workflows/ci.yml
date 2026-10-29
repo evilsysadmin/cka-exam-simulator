@@ -18,10 +18,29 @@ jobs:
       - run: python -m pip install -e '.[dev]'
       - run: python -m pytest
       - run: python -m cka_sim validate-bank
+      - name: OCI factory dry run without secrets or inference
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ''
+          CLOUDFLARE_API_TOKEN: ''
+          CKA_SCENARIO_PROVIDER: workers-ai
+        run: |
+          python -m cka_sim factory-run > .local/factory-plan.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('.local/factory-plan.json').read_text())
+          assert plan['status'] == 'dry-run'
+          assert plan['provider'] == 'workers-ai'
+          assert plan['generated'] == []
+          assert not Path('.local/factory-budget.json').exists()
+          assert not Path('scenarios/generated').exists()
+          PY
       - name: Verify Makefile commands are parseable without starting Docker
         run: |
           make -n ollama-up
           make -n scenario-generate COUNT=2
+          make -n factory-plan
+          make -n factory-execute COUNT=2
           make -n scenario-generate PROVIDER=workers-ai COUNT=2
           make -n scenario-audit
           make -n scenario-batch PROVIDER=workers-ai COUNT=2

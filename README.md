@@ -185,6 +185,30 @@ are extended. `COUNT` is limited to 1–20 per invocation. Partial batches can
 remain quarantined if later generated outputs fail. Never expose local Ollama
 or developer Kubernetes endpoints to the Internet.
 
+## OCI A1 guarded Workers AI operator factory (not deployed)
+
+The remote scenario generator now has a separate **one-shot, backend-only**
+entry point suitable for a future isolated OCI A1 staging worker:
+
+```bash
+make factory-plan COUNT=1 TYPE=deployment_scale    # no credentials, no AI calls
+make factory-execute COUNT=1 TYPE=deployment_scale # explicit paid inference
+```
+
+The factory **never** invokes Ollama, Kubernetes or a public endpoint.
+Execution requires account-scoped Workers AI credentials from the backend
+runtime, an allowlisted structured-JSON model and explicit opt-in. It uses a
+local exclusive lock, limits each run to 2 requests, records up to **5 requests
+per UTC day including failed attempts**, and refuses to exceed 5 pending YAML
+proposals. Quota state resides under ignored `.local/`, and generated YAML
+remains under ignored `scenarios/generated/`; production operators MUST
+persist both paths securely across deployments. Local quotas are not
+Cloudflare billing limits. No timer, worker deployment, secret provisioning,
+public runner or auto-publishing is enabled by this source change.
+
+See [OCI A1 factory handoff](docs/oci-a1-scenario-factory.md) for staging
+environment requirements, persistence, budget and ownership gates.
+
 ## Roadmap
 
 1. Reliable VM-backed per-user ephemeral runner, auth, quotas and isolation.

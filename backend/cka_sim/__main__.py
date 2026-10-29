@@ -7,6 +7,7 @@ import sys
 import time
 
 from .catalog import PROPOSALS, load_bank, load_proposal, save_generated
+from .factory import run_factory
 from .kube import LabError, cleanup, create_lab, delete_lab, grade, kubectl, setup, solve_for_smoke
 from .ollama import GenerationError
 from .providers import SUPPORTED_PROVIDERS, default_model, generate
@@ -59,6 +60,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="cka-sim")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("validate-bank")
+    factory = commands.add_parser("factory-run")
+    factory.add_argument("--execute", action="store_true")
+    factory.add_argument("--count", type=int, default=1)
+    factory.add_argument("--type", choices=["deployment_scale", "service_selector"],
+                         default="deployment_scale")
+    factory.add_argument("--model", default=None)
     auditor = commands.add_parser("audit-proposals")
     auditor.add_argument("--directory", type=Path, default=PROPOSALS)
     commands.add_parser("verify-proposals")
@@ -94,6 +101,12 @@ def main() -> None:
             if not bank:
                 raise ValueError("No curated scenarios found")
             print(f"Validated {len(bank)} curated scenarios")
+        elif args.command == "factory-run":
+            options = {"execute": args.execute, "count": args.count,
+                       "scenario_type": args.type}
+            if args.model is not None:
+                options["model"] = args.model
+            print(json.dumps(run_factory(**options), indent=2, ensure_ascii=False))
         elif args.command == "audit-proposals":
             result = audit_proposals(args.directory)
             print(json.dumps(result, indent=2, ensure_ascii=False))
