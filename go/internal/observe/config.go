@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -23,32 +22,10 @@ import (
 const Context = "kind-cka-dev"
 const ObserverAccount = "cka-grade-observer"
 
-var scopedNamespace = regexp.MustCompile(`^cka-[a-z][a-z0-9-]*[a-z0-9]// Package observe reads only the dedicated local CKA development cluster.
-// It cannot choose a production context or invoke kubeconfig credential plugins.
-package observe
+var scopedNamespace = regexp.MustCompile("^cka-[a-z][a-z0-9-]*[a-z0-9]$")
 
-import (
-	"encoding/base64"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net"
-	"net/url"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
-	"time"
-
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
-)
-
-)
-
-// tokenSubject performs a preflight sanity check on the unverified JWT
-// payload; the Kubernetes API server validates the signature and RBAC.
+// tokenSubject is a preflight sanity check on the unverified JWT payload.
+// Kubernetes API server verifies the token signature and RBAC on each call.
 func tokenSubject(token string) (string, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 || len(token) > 16384 {
@@ -58,8 +35,10 @@ func tokenSubject(token string) (string, error) {
 	if err != nil || len(raw) > 4096 {
 		return "", errors.New("invalid scoped token payload")
 	}
-	var claims struct { Subject string `json:"sub"` }
-	if json.Unmarshal(raw, &claims) != nil || claims.Subject == "" {
+	var claims struct {
+		Subject string "json:\"sub\""
+	}
+	if err := json.Unmarshal(raw, &claims); err != nil || claims.Subject == "" {
 		return "", errors.New("missing scoped token subject")
 	}
 	return claims.Subject, nil
@@ -82,13 +61,12 @@ func checkedLocalURL(server string) error {
 	return nil
 }
 
-// validate refuses multi-context kubeconfig files, external paths, exec auth,
-// insecure TLS and nonlocal API servers. No client is created on failure.
+// validate continues to support the local kind admin certificate for the
+// trusted test harness, never for the Go observer CLI.
 func validate(cfg *api.Config) error { return validateForNamespace(cfg, "") }
 
-// validateForNamespace allows only the fixed developer certificate or one
-// narrowly named, namespace-scoped service-account token. In both cases the
-// TLS endpoint and kubeconfig topology remain fixed and local-only.
+// validateForNamespace accepts only one fixed local kind context.
+// A namespace requires a short-lived SA token, not the developer certificate.
 func validateForNamespace(cfg *api.Config, namespace string) error {
 	if cfg == nil || cfg.CurrentContext != Context ||
 		len(cfg.Contexts) != 1 || len(cfg.Clusters) != 1 || len(cfg.AuthInfos) != 1 {
@@ -128,21 +106,21 @@ func validateForNamespace(cfg *api.Config, namespace string) error {
 		return errors.New("scoped kind auth requires a CKA namespace and token only")
 	}
 	subject, err := tokenSubject(user.Token)
-	if err != nil || subject != fmt.Sprintf("system:serviceaccount:%s:%s", namespace, ObserverAccount) {
+	expected := "system:serviceaccount:" + namespace + ":" + ObserverAccount
+	if err != nil || subject != expected {
 		return errors.New("scoped kind auth has wrong service-account subject")
 	}
 	return nil
 }
 
-// LoadLocalConfig accepts only a private, explicit kubeconfig file, normally
-// <repo>/.local/kubeconfig produced by kind. Never load ~/.kube/config.
+// LoadLocalConfig is kept for trusted local tests only. The CLI invokes the
+// scoped entrypoint below and refuses this powerful developer identity.
 func LoadLocalConfig(path string) (*rest.Config, error) {
 	return loadLocalConfig(path, "")
 }
 
-// LoadScopedLocalConfig requires a short-lived service-account bearer token
-// for the exact scenario namespace. This is the only config accepted by
-// the Go live observer CLI; privileged kind developer certs are refused.
+// LoadScopedLocalConfig requires a scoped SA token for the exact validated
+// scenario namespace. The Kubernetes API enforces the real RBAC boundary.
 func LoadScopedLocalConfig(path, namespace string) (*rest.Config, error) {
 	if !scopedNamespace.MatchString(namespace) || len(namespace) > 55 {
 		return nil, errors.New("invalid CKA scope")
