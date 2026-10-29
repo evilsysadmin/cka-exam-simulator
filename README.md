@@ -2,6 +2,18 @@
 
 An experimental **hands-on** Kubernetes CKA simulator with browser-based developer terminal, deterministic grading against live cluster state and optional local Ollama scenario proposals.
 
+## ShadowOps Identity: first local verifier PoC (NOT login)
+
+CKA now has an **opt-in, loopback-only verification handshake**, `GET /api/dev/identity/poc/me`. It proves only that a staging JWT is signed by a **pre-pinned local public JWKS**, uses `iss=https://id-staging.shadowops.dpdns.org`, `aud=cka-simulator`, has a canonical UUIDv4 `sub` and valid `iat/nbf/exp` (maximum 1 hour). Both the issuer and audience are fixed in code; JWT headers cannot select a remote key source. Ed25519 signature and JWKS type, `kid`, duplicates, canonical encoding and timing are checked fail-closed. The endpoint returns a subject UUID and a **`signature-only-poc`** label, never a session or an authorization grant.
+
+This is deliberately separate from Kubernetes lab APIs. No new public frontend route, cookie, login, password, session, token issuance, account registration, token exchange, refresh, logout, SSO browser redirect or real Identity deployment exists. The regular developer lab still requires its **separate** `CKA_ENABLE_LOCAL_LAB=1` and loopback guard, and the Cloudflare Pages public preview remains static and read-only.
+
+The PoC endpoint is **404 by default**. To exercise it locally *only after* a trusted staging Identity app token issuer exists, set `CKA_IDENTITY_POC_ENABLED=1` and `CKA_IDENTITY_POC_JWKS_FILE` to an **absolute path to a trusted, regular, non-symlink public Ed25519 JWKS file** from the staging issuer. Start the existing developer API bound to `127.0.0.1`; send `X-CKA-Identity-PoC: 1` and `Authorization: Bearer <staging-cka-token>` to that GET endpoint. This local diagnostic flag must NOT be enabled in OCI staging or production. Missing/malformed JWKS fail closed. The local JWKS is a trust-anchor input, **not** a file to accept from browser or HTTP request parameters. No public keys, passwords, signing secrets or tokens are checked in.
+
+For now, the standalone ShadowOps Identity runtime has **no app-token issuance** and only emits a two-minute synthetic token with `aud=shadowops-identity-probe`, which this CKA verifier *correctly rejects*. Therefore automated tests generate independent **ephemeral synthetic Ed25519 keys** and CKA-audience claims, verifying both accepted and rejected cases. This establishes a strict consumer contract, not a working cross-service login.
+
+Run `python -m pytest backend/tests/test_identity_poc.py`. Next gates: audited real staging Identity app-token issuer/session revocation, consumer token/session binding, approved JWKS rotation and secure distribution, local login round trip, and isolated per-user Kubernetes runner/quotas/TTL before publicly enabling labs.
+
 ## Developer-only local preview
 
 Not safe for public hosting: no authentication, tenant isolation, quotas, persistent multi-user sessions or production-grade terminal yet. Do not publish these endpoints or expose localhost via an internet proxy.
