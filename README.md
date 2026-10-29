@@ -49,15 +49,15 @@ public runner, SSO, or user-accessible Kubernetes endpoint.
 
 ```bash
 make ollama-up
-make ollama-pull                           # MODEL=qwen2.5:7b-instruct by default (~4.7 GB)
+make ollama-pull                           # OLLAMA_MODEL=qwen2.5:7b-instruct (~4.7 GB)
 make scenario-generate TYPE=deployment_scale COUNT=3
 make scenario-generate TYPE=service_selector MODEL=qwen2.5:7b-instruct
 make scenario-validate PROPOSAL=scenarios/generated/<generated-slug>.yaml
 ```
 
 For **OCI A1 / remote generation**, configure these secrets in the backend's
-runtime secret manager, never in source code, Compose files, frontend bundles,
-logs or GitHub actions:
+runtime secret configuration (to be wired into the OCI deployment), never in source code,
+Compose files, frontend bundles, logs or GitHub actions:
 
 ```bash
 # Provide securely to the backend process:
@@ -80,7 +80,8 @@ same schema, quarantine and grading policy regardless of provider.
 
 For **local Ollama**, the container listens on host **127.0.0.1:11434 only** and keeps its
 models in a Docker volume; `make ollama-down` stops it without deleting the
-downloads. Use `MODEL=qwen2.5:1.5b-instruct` for a smaller CPU model. Only a
+downloads. Use `make ollama-pull OLLAMA_MODEL=qwen2.5:1.5b-instruct` and then
+`make scenario-generate MODEL=qwen2.5:1.5b-instruct` for a smaller CPU model. Only a
 single model is loaded at a time. Native Ollama installed locally also works;
 the generator only accepts a loopback URL via `OLLAMA_URL`.
 

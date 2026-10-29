@@ -67,6 +67,8 @@ def test_workers_ai_never_accepts_invalid_responses(response):
 def test_workers_ai_rejects_type_mismatch_and_does_not_echo_secrets():
     proposed = candidate()
     proposed["scenario_type"] = "service_selector"
+    proposed["target_replicas"] = proposed["initial_replicas"]
+    proposed["initial_selector"] = "old-payment-api"
     transport = httpx.MockTransport(lambda _: httpx.Response(200, json={
         "success": True, "result": {"response": proposed},
     }))
