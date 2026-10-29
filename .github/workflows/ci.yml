@@ -193,7 +193,8 @@ jobs:
         run: |
           set -euo pipefail
           cd go
-          go mod tidy
+          go mod download
+          go mod verify
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cka-observe" ./cmd/cka-observe
           cd ..
           python scripts/check_go_live_observer.py "$RUNNER_TEMP/cka-observe"

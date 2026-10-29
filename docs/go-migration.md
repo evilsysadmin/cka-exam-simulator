@@ -126,8 +126,12 @@ any API server, exam session, shell executor or Kubernetes mutation operation.
   rollout readiness. The live-kind observer is never invoked on an unknown
   context, or outside the explicit CI/test operator flow.
 
-The Go dependency graph is downloaded from the standard Go module proxy and
-verified by the checksum database during CI. **No OCI installation, public
+The exact client-go dependency graph is now checked into `go/go.mod` and
+`go/go.sum` with module checksums. CI runs `go mod tidy` and fails if
+either tracked lock file changes, then runs `go mod verify`. The live-kind
+test downloads and verifies those pinned dependencies before building. This
+establishes reproducible module versions/checksums; it does not replace
+artifact signatures, SBOM review or vulnerability scanning. **No OCI installation, public
 API endpoint, new Kubernetes RBAC policy or production auth has been
 configured.** Before any real multitenant rollout we must provision
 restricted read-only Kubernetes credentials, restrict target namespaces and
