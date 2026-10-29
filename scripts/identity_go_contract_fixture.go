@@ -23,20 +23,20 @@ type claims struct {
 	Iss string `json:"iss"`
 	Aud string `json:"aud"`
 	Sub string `json:"sub"`
-	Iat int64 `json:"iat"`
-	Nbf int64 `json:"nbf"`
-	Exp int64 `json:"exp"`
+	Iat int64  `json:"iat"`
+	Nbf int64  `json:"nbf"`
+	Exp int64  `json:"exp"`
 }
 
 type fixture struct {
-	JWKS json.RawMessage `json:"jwks"`
-	Subject string `json:"subject"`
-	Valid string `json:"valid"`
-	Probe string `json:"probe"`
-	WrongAudience string `json:"wrong_audience"`
-	WrongIssuer string `json:"wrong_issuer"`
-	Expired string `json:"expired"`
-	Future string `json:"future"`
+	JWKS          json.RawMessage `json:"jwks"`
+	Subject       string          `json:"subject"`
+	Valid         string          `json:"valid"`
+	Probe         string          `json:"probe"`
+	WrongAudience string          `json:"wrong_audience"`
+	WrongIssuer   string          `json:"wrong_issuer"`
+	Expired       string          `json:"expired"`
+	Future        string          `json:"future"`
 }
 
 func sign(priv ed25519.PrivateKey, kid string, body claims) (string, error) {
@@ -91,32 +91,51 @@ func run() error {
 	result.JWKS = publicJWKS
 	result.Subject = syntheticSubject
 	result.Valid, err = makeToken(base)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	result.Probe, err = identity.ProbeToken(now)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	v := base
 	v.Aud = "chronicles"
 	result.WrongAudience, err = makeToken(v)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	v = base
 	v.Iss = "https://id.shadowops.dpdns.org"
 	result.WrongIssuer, err = makeToken(v)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	v = base
 	v.Iat, v.Nbf, v.Exp = epoch-7200, epoch-7200, epoch-7100
 	result.Expired, err = makeToken(v)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	v = base
 	v.Iat, v.Nbf, v.Exp = epoch+3600, epoch+3600, epoch+3900
 	result.Future, err = makeToken(v)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	encoded, err := json.Marshal(result)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	// File is a disposable test artifact, NOT a signing key or a user session.
 	f, err := os.OpenFile(outfile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil { return err }
-	if _, err := f.Write(encoded); err != nil { _ = f.Close(); return err }
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(encoded); err != nil {
+		_ = f.Close()
+		return err
+	}
 	return f.Close()
 }
 
