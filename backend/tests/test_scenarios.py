@@ -25,10 +25,16 @@ def test_fixtures_are_fixed_and_namespaced(bank):
     for s in bank.values():
         docs = fixture_objects(s)
         assert [d["kind"] for d in docs] == ["Namespace", "Deployment", "Service"]
-        assert docs[1]["spec"]["template"]["spec"]["containers"][0]["image"] == "nginx:1.27-alpine"
+        container = docs[1]["spec"]["template"]["spec"]["containers"][0]
+        assert container["image"].startswith("ghcr.io/nginxinc/nginx-unprivileged:1.27-alpine@sha256:")
+        assert container["ports"][0]["containerPort"] == 8080
+        assert container["securityContext"]["runAsNonRoot"] is True
+        assert container["securityContext"]["runAsUser"] == 101
+        assert container["securityContext"]["capabilities"]["drop"] == ["ALL"]
+        assert docs[2]["spec"]["ports"][0] == {"port": 80, "targetPort": 8080}
         assert docs[2]["metadata"]["namespace"] == s.namespace
         assert "hostPath" not in render_yaml(s)
-        assert "privileged" not in render_yaml(s)
+        assert container["securityContext"].get("privileged") is not True
 
 
 @pytest.mark.parametrize("field,value", [
@@ -98,6 +104,16 @@ def test_selector_grading_requires_correct_selector_and_backends(bank):
     assert not grade_state(s, deployment=dep,
                            service={"spec": {"selector": {"app": s.initial_selector}}},
                            endpoint_slices=ready).passed
+
+
+def test_endpoint_slice_with_null_endpoints_is_unsolved_not_an_error(bank):
+    s = bank["fix-catalog-service"]
+    deployment = {"spec": {"replicas": s.target_replicas}}
+    service = {"spec": {"selector": {"app": s.target_selector}}}
+    for slices in ({"items": [{"endpoints": None}]}, {"items": None}, {"items": []}):
+        grade = grade_state(s, deployment=deployment, service=service, endpoint_slices=slices)
+        assert grade.passed is False
+        assert grade.checks[1] == {"name": "Backends listos", "passed": False}
 
 
 def test_ollama_receives_json_schema(bank):

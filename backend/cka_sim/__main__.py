@@ -6,8 +6,23 @@ import sys
 import time
 
 from .catalog import load_bank, save_generated
-from .kube import LabError, cleanup, create_lab, delete_lab, grade, setup, solve_for_smoke
+from .kube import LabError, cleanup, create_lab, delete_lab, grade, kubectl, setup, solve_for_smoke
 from .ollama import GenerationError, generate
+
+
+
+def _diagnose_smoke_failure(namespace: str) -> None:
+    """Capture the failing pods/events before the lab namespace is deleted."""
+    print(f"SMOKE FAILURE: diagnostics for {namespace}", file=sys.stderr)
+    for args in (
+        ["get", "pods", "-n", namespace, "-o", "wide"],
+        ["describe", "pods", "-n", namespace],
+        ["get", "events", "-n", namespace, "--sort-by=.metadata.creationTimestamp"],
+    ):
+        try:
+            print(kubectl(args)[-16000:], file=sys.stderr)
+        except LabError as exc:
+            print(f"Unable to inspect {args[0]}: {exc}", file=sys.stderr)
 
 
 def main() -> None:
@@ -63,6 +78,9 @@ def main() -> None:
                         time.sleep(3)
                     else:
                         raise ValueError(f"Reference fix not graded as passing: {after}")
+                except Exception:
+                    _diagnose_smoke_failure(s.namespace)
+                    raise
                 finally:
                     cleanup(s)
     except (LabError, GenerationError, ValueError, KeyError, OSError) as exc:
