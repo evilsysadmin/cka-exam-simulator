@@ -144,6 +144,24 @@ The local verification file is not cryptographically signed and must be treated
 as trusted operator-local state. Human review and a separate Git PR remain
 mandatory before any scenario reaches students.
 
+When an operator has **personally reviewed** an unchanged proposal, they can
+prepare a private, non-publishing review packet using its exact digest from
+`make scenario-review-queue`:
+
+```bash
+make scenario-prepare-review SLUG=<slug> SHA256=<64-hex-digest> REVIEWER=<label>
+```
+
+This is an explicit CLI action, never part of generation or verification.
+It requires the entire batch to retain valid live smoke evidence, checks the
+source digest again, and creates `.local/review-drafts/<slug>.review.json`
+(mode 0600, no overwrite). The packet records the reviewer's **unverified
+operator label**, the exact source digest, and the schema-validated scenario.
+It is **not** a curated bank entry or proof of authenticated approval. An
+operator must independently inspect the packet and prepare a separate Git PR
+adding the reviewed scenario to `scenarios/` before it can become public.
+No automatic publication or deployment is performed.
+
 Currently both AI providers support `deployment_scale` and `service_selector`
 only; the CPU-resource scenario is curated until its generator quality gates
 are extended. `COUNT` is limited to 1–20 per invocation. Partial batches can

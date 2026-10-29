@@ -9,10 +9,13 @@ MODEL ?= $(if $(filter workers-ai,$(PROVIDER)),$(CF_AI_MODEL),$(OLLAMA_MODEL))
 TYPE ?= deployment_scale
 COUNT ?= 1
 PROPOSAL ?=
+SLUG ?=
+SHA256 ?=
+REVIEWER ?=
 OLLAMA_URL ?= http://127.0.0.1:11434
 export OLLAMA_URL
 
-.PHONY: help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-verify scenario-review-queue scenario-validate scenario-smoke scenario-check lab-up lab-down
+.PHONY: help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-verify scenario-review-queue scenario-prepare-review scenario-validate scenario-smoke scenario-check lab-up lab-down
 
 help:
 	@printf '%s\n' \
@@ -24,6 +27,7 @@ help:
 	  'make scenario-batch                       Generate then audit; never auto-publish' \
 	  'make scenario-verify                      Live smoke of <=5 audited proposals in dedicated kind' \
 	  'make scenario-review-queue               Read-only verified proposals awaiting human review' \
+	  'make scenario-prepare-review             Explicit private draft; requires SLUG SHA256 REVIEWER' \
 	  'make scenario-validate PROPOSAL=scenarios/generated/<slug>.yaml' \
 	  'make lab-up                               Create dedicated kind-cka-dev cluster manually' \
 	  'make scenario-smoke PROPOSAL=scenarios/generated/<slug>.yaml' \
@@ -58,6 +62,10 @@ scenario-verify:
 
 scenario-review-queue:
 	$(PYTHON) -m cka_sim review-queue
+
+scenario-prepare-review:
+	@test -n "$(SLUG)" -a -n "$(SHA256)" -a -n "$(REVIEWER)" || { echo 'SLUG, SHA256, and REVIEWER are required' >&2; exit 2; }
+	$(PYTHON) -m cka_sim prepare-review --slug "$(SLUG)" --sha256 "$(SHA256)" --reviewer "$(REVIEWER)"
 
 scenario-validate:
 	@test -n "$(PROPOSAL)" || { echo 'PROPOSAL=<path-to-generated-yaml> is required' >&2; exit 2; }
