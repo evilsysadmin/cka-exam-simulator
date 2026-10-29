@@ -23,6 +23,8 @@ jobs:
           make -n ollama-up
           make -n scenario-generate COUNT=2
           make -n scenario-generate PROVIDER=workers-ai COUNT=2
+          make -n scenario-audit
+          make -n scenario-batch PROVIDER=workers-ai COUNT=2
           make -n scenario-validate PROPOSAL=scenarios/generated/sample.yaml
           make -n scenario-smoke PROPOSAL=scenarios/generated/sample.yaml
 

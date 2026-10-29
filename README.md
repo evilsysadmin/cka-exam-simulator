@@ -52,6 +52,7 @@ make ollama-up
 make ollama-pull                           # OLLAMA_MODEL=qwen2.5:7b-instruct (~4.7 GB)
 make scenario-generate TYPE=deployment_scale COUNT=3
 make scenario-generate TYPE=service_selector MODEL=qwen2.5:7b-instruct
+make scenario-audit                       # Offline audit of the whole quarantine
 make scenario-validate PROPOSAL=scenarios/generated/<generated-slug>.yaml
 ```
 
@@ -92,6 +93,17 @@ Workers AI supports `response_format.type=json_schema`; Ollama uses
 revalidates its DSL and writes `scenarios/generated/*.yaml` using `safe_dump`.
 The YAML reader rejects duplicate keys, custom tags, aliases, oversized files,
 unknown schema fields, unsafe names and collisions with curated scenarios.
+Run `make scenario-audit` (or `python -m cka_sim audit-proposals`) to
+inspect the whole quarantine **offline**, with a bounded 200-file limit.
+Its machine-readable JSON report gives accepted/rejected counts, reason codes
+and SHA-256 hashes of accepted YAML without exposing generated story text.
+It also rejects **exact normalized duplicate stories** within the same scenario
+type, including copies of curated scenarios. This is a deterministic copy check,
+**not** a semantic novelty score or a proof that a challenge is educational.
+For a convenient operator-only sequence use `make scenario-batch COUNT=5
+PROVIDER=workers-ai`: generate then run the offline audit. On failure the
+proposals remain in quarantine for inspection; nothing is published.
+The report can be redirected to a local file under `.local/` if desired.
 `make scenario-validate` checks **structure and policy only**; it does not
 guarantee a working Kubernetes scenario.
 

@@ -10,6 +10,7 @@ from .catalog import PROPOSALS, load_bank, load_proposal, save_generated
 from .kube import LabError, cleanup, create_lab, delete_lab, grade, kubectl, setup, solve_for_smoke
 from .ollama import GenerationError
 from .providers import SUPPORTED_PROVIDERS, default_model, generate
+from .quality import audit_proposals
 
 
 
@@ -53,6 +54,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="cka-sim")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("validate-bank")
+    auditor = commands.add_parser("audit-proposals")
+    auditor.add_argument("--directory", type=Path, default=PROPOSALS)
     generator = commands.add_parser("generate")
     generator.add_argument("--provider", choices=SUPPORTED_PROVIDERS,
                            default=os.getenv("CKA_SCENARIO_PROVIDER", "ollama"))
@@ -77,6 +80,11 @@ def main() -> None:
             if not bank:
                 raise ValueError("No curated scenarios found")
             print(f"Validated {len(bank)} curated scenarios")
+        elif args.command == "audit-proposals":
+            result = audit_proposals(args.directory)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            if not result["passed"]:
+                raise SystemExit(1)
         elif args.command == "generate":
             if not 1 <= args.count <= 20:
                 raise ValueError("--count must be between 1 and 20")
