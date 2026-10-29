@@ -96,6 +96,49 @@ python ../scripts/check_go_candidate_parity.py \
 **No Go HTTP server, student session or Kubernetes permission** is enabled
 by this milestone. Python still owns the running dev API and grading.
 
+## Milestone 4: read-only client-go observer for the dedicated kind lab
+
+The Go `internal/observe` package introduces the first **actual Kubernetes
+API read path** using `k8s.io/client-go` and `k8s.io/apimachinery`, without
+any API server, exam session, shell executor or Kubernetes mutation operation.
+
+- Accepts only an **explicit absolute**, private, non-symlink kubeconfig
+  using the dedicated `kind-cka-dev` context, exactly one cluster and one
+  embedded-cert user. It rejects remote/DNS Kubernetes endpoints, non-HTTPS
+  connections, proxy URLs, insecure TLS, credential-file paths, bearer tokens,
+  exec/auth-provider plugins, extra contexts and impersonation.
+- Reads exactly the curated scenario's `apps/v1 deployments`, `v1 services`
+  and `discovery.k8s.io/v1 endpointslices` using `GET` and `LIST` only.
+  Service EndpointSlices are selected by the exact
+  `kubernetes.io/service-name` label. It does not list other namespaces,
+  watch events, or expose arbitrary GVRs.
+- Missing Deployments/Services produce a **failed grade** (Python parity);
+  forbidden API reads and incomplete lists fail closed rather than giving
+  the candidate an imaginary result.
+- Normalizes Kubernetes API JSON into the already 30-snapshot-parity-tested
+  Go evaluator. `go/cmd/cka-observe` requires explicit `-dev-live`, an
+  approved scenario slug, a private kubeconfig path and a curated bank. It
+  prints only the deterministic grade, never the raw object or credentials.
+- Unit tests cover unsafe context/auth options and exact allowed read
+  operations with injected fake readers. The existing disposable-kind CI
+  provisions and solves one real Deployment using **Python only**;
+  Go observes both states and must agree with the reference grader after
+  rollout readiness. The live-kind observer is never invoked on an unknown
+  context, or outside the explicit CI/test operator flow.
+
+The exact client-go dependency graph is now checked into `go/go.mod` and
+`go/go.sum` with module checksums. CI runs `go mod tidy` and fails if
+either tracked lock file changes, then runs `go mod verify`. The live-kind
+test downloads and verifies those pinned dependencies before building. This
+establishes reproducible module versions/checksums; it does not replace
+artifact signatures, SBOM review or vulnerability scanning. **No OCI installation, public
+API endpoint, new Kubernetes RBAC policy or production auth has been
+configured.** Before any real multitenant rollout we must provision
+restricted read-only Kubernetes credentials, restrict target namespaces and
+validate per-user isolated runners. The current kind kubeconfig still has
+development privileges; this code only exercises read methods, not a
+production-grade Kubernetes RBAC boundary.
+
 ## Staged migration contract
 
 1. **Now:** Go reads and validates curated JSON in parallel with Python.
@@ -105,8 +148,10 @@ by this milestone. Python still owns the running dev API and grading.
    Kubernetes snapshots, and candidate-safe view parity for the curated bank
    are independently checked against Python. Next: a pinned, read-only
    live-kind resource observer before any Go grading handoff.
-3. Port isolated lab orchestration with `client-go`, preserving the
-   fixed-kind development context and strict per-user runner isolation.
+3. **In progress:** client-go now supports an allowlisted, read-only
+   observer for fixed kind-cka-dev and live-kind grading parity. Next port
+   carefully isolated lab orchestration; never reuse the powerful local kind
+   kubeconfig as production per-user credentials.
 4. Port the operator-only Workers AI scenario factory, quarantine, budget
    and review gates to Go, preserving the no-auto-publication rule.
 5. Only once equivalent integration and live-kind acceptance are green,

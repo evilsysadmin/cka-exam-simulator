@@ -132,7 +132,7 @@ jobs:
   kind-smoke:
     name: Live Kubernetes scenario smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -184,6 +184,20 @@ jobs:
           assert queue["entries"][0]["status"] == "needs-human-review"
           assert not Path("scenarios/ci-generated-scale.json").exists()
           PY
+      - name: Install Go toolchain for dedicated kind read-only observer
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.mod
+      - name: Compile Go read-only observer and prove live-kind parity
+        run: |
+          set -euo pipefail
+          cd go
+          go mod download
+          go mod verify
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cka-observe" ./cmd/cka-observe
+          cd ..
+          python scripts/check_go_live_observer.py "$RUNNER_TEMP/cka-observe"
       - name: Print cluster diagnostics if smoke fails
         if: failure()
         run: |
