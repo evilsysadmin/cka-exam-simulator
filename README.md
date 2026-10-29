@@ -196,6 +196,12 @@ make factory-execute COUNT=1 TYPE=deployment_scale # explicit paid inference
 ```
 
 The factory **never** invokes Ollama, Kubernetes or a public endpoint.
+For a hardened A1 staging service, `make factory-plan FACTORY_WORKSPACE=/var/lib/shadowops/cka-factory-staging`
+(and `make factory-execute FACTORY_WORKSPACE=...`) separates mutable state and
+the YAML quarantine from the **read-only application checkout**. The workspace
+must be a preprovisioned absolute non-symlink directory; its state and queue
+remain under that single persistent root and cannot be redirected separately.
+The local-development default stays unchanged when the option is absent.
 Execution requires account-scoped Workers AI credentials from the backend
 runtime, an allowlisted structured-JSON model and explicit opt-in. It uses a
 local exclusive lock, limits each run to 2 requests, records up to **5 requests

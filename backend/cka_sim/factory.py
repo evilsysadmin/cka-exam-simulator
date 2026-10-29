@@ -99,6 +99,29 @@ def _queued_count(directory: Path) -> int:
     return audit["total"]
 
 
+def _workspace_paths(workspace: Path) -> tuple[Path, Path, Path]:
+    """Pin all mutable data to one preprovisioned, non-symlink workspace.
+
+    This allows the installed application and curated bank to be read-only.
+    A host operator must protect ownership and persist the same workspace
+    across revisions; choosing another workspace resets LOCAL budget scope.
+    """
+    if not isinstance(workspace, Path) or not workspace.is_absolute() or ".." in workspace.parts:
+        raise FactoryError("Factory workspace must be an absolute canonical directory")
+    if not workspace.is_dir() or workspace.is_symlink():
+        raise FactoryError("Factory workspace must already exist as a real directory")
+    for parent in workspace.parents:
+        if parent.is_symlink():
+            raise FactoryError("Factory workspace ancestry must not contain symlinks")
+    state_dir = workspace / ".local"
+    scenario_parent = workspace / "scenarios"
+    quarantine = scenario_parent / "generated"
+    for directory in (state_dir, scenario_parent, quarantine):
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+            raise FactoryError("Factory workspace contains unsafe paths")
+    return (quarantine, state_dir / "factory-budget.json", state_dir / "factory.lock")
+
+
 def _require_workers_credentials():
     account = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
     token = os.getenv("CLOUDFLARE_API_TOKEN", "")
@@ -116,6 +139,7 @@ def run_factory(*, execute: bool = False, count: int = 1,
                 directory: Path | None = None,
                 state: Path | None = None,
                 lock: Path | None = None,
+                workspace: Path | None = None,
                 generator=None) -> dict:
     """Dry-run by default. Opt-in execution is serial and reserves quota first."""
     if type(count) is not int or not 1 <= count <= MAX_PER_RUN:
@@ -126,9 +150,14 @@ def run_factory(*, execute: bool = False, count: int = 1,
         raise FactoryError("Workers AI model is not in the structured-JSON allowlist")
     if type(execute) is not bool:
         raise FactoryError("Explicit execute flag required")
-    directory = PROPOSALS if directory is None else directory
-    state = STATE if state is None else state
-    lock = LOCK if lock is None else lock
+    if workspace is not None:
+        if directory is not None or state is not None or lock is not None:
+            raise FactoryError("Workspace cannot be combined with individual state paths")
+        directory, state, lock = _workspace_paths(workspace)
+    else:
+        directory = PROPOSALS if directory is None else directory
+        state = STATE if state is None else state
+        lock = LOCK if lock is None else lock
     if state.parent != lock.parent:
         raise FactoryError("Factory lock and budget must share a directory")
 

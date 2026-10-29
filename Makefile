@@ -8,6 +8,7 @@ CF_AI_MODEL ?= @cf/meta/llama-3.3-70b-instruct-fp8-fast
 MODEL ?= $(if $(filter workers-ai,$(PROVIDER)),$(CF_AI_MODEL),$(OLLAMA_MODEL))
 TYPE ?= deployment_scale
 COUNT ?= 1
+FACTORY_WORKSPACE ?=
 PROPOSAL ?=
 SLUG ?=
 SHA256 ?=
@@ -27,6 +28,7 @@ help:
 	  'make scenario-batch                       Generate then audit; never auto-publish' \
 	  'make factory-plan                         Offline OCI A1 Workers AI preflight (no charge)' \
 	  'make factory-execute COUNT=1              Explicit bounded OCI A1 Workers AI generation' \
+	  'make factory-plan FACTORY_WORKSPACE=/path  Use independent persistent factory workspace' \
 	  'make scenario-verify                      Live smoke of <=5 audited proposals in dedicated kind' \
 	  'make scenario-review-queue               Read-only verified proposals awaiting human review' \
 	  'make scenario-prepare-review             Explicit private draft; requires SLUG SHA256 REVIEWER' \
@@ -52,10 +54,10 @@ ollama-status:
 	$(COMPOSE) exec -T ollama ollama list
 
 factory-plan:
-	$(PYTHON) -m cka_sim factory-run --count "$(COUNT)" --type "$(TYPE)" --model "$(CF_AI_MODEL)"
+	$(PYTHON) -m cka_sim factory-run --count "$(COUNT)" --type "$(TYPE)" --model "$(CF_AI_MODEL)" $(if $(FACTORY_WORKSPACE),--workspace "$(FACTORY_WORKSPACE)")
 
 factory-execute:
-	$(PYTHON) -m cka_sim factory-run --execute --count "$(COUNT)" --type "$(TYPE)" --model "$(CF_AI_MODEL)"
+	$(PYTHON) -m cka_sim factory-run --execute --count "$(COUNT)" --type "$(TYPE)" --model "$(CF_AI_MODEL)" $(if $(FACTORY_WORKSPACE),--workspace "$(FACTORY_WORKSPACE)")
 
 scenario-generate:
 	$(PYTHON) -m cka_sim generate --provider "$(PROVIDER)" --model "$(MODEL)" --type "$(TYPE)" --count "$(COUNT)" --output scenarios/generated

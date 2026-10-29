@@ -36,11 +36,37 @@ jobs:
           assert not Path('.local/factory-budget.json').exists()
           assert not Path('scenarios/generated').exists()
           PY
+      - name: Assert preprovisioned staging workspace never writes to source
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ''
+          CLOUDFLARE_API_TOKEN: ''
+          CKA_SCENARIO_PROVIDER: workers-ai
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+          with tempfile.TemporaryDirectory(prefix="cka-factory-staging-") as data_root:
+              plan = json.loads(subprocess.check_output([
+                  sys.executable, "-m", "cka_sim", "factory-run",
+                  "--workspace", data_root, "--count", "1",
+              ], text=True))
+              workspace = Path(data_root)
+              assert plan["status"] == "dry-run"
+              assert plan["generated"] == []
+              assert (workspace / ".local/factory.lock").exists()
+              assert not (workspace / ".local/factory-budget.json").exists()
+              assert not (workspace / "scenarios/generated").exists()
+              assert not Path("scenarios/generated").exists()
+          PY
       - name: Verify Makefile commands are parseable without starting Docker
         run: |
           make -n ollama-up
           make -n scenario-generate COUNT=2
           make -n factory-plan
+          make -n factory-plan FACTORY_WORKSPACE=/var/lib/shadowops/cka-factory-staging
           make -n factory-execute COUNT=2
           make -n scenario-generate PROVIDER=workers-ai COUNT=2
           make -n scenario-audit

@@ -30,18 +30,36 @@ with dedicated runtime secret injection of `CLOUDFLARE_ACCOUNT_ID` and
 systemd unit files, public Cloudflare Pages, or shell command arguments.
 
 ```bash
-make factory-execute COUNT=1 TYPE=deployment_scale
-# Outputs only scenarios/generated/*.yaml, never scenarios/*.json
-make scenario-audit
+# Staging: preprovision ONE private persistent directory owned by the service
+# account, separately from the read-only application checkout:
+make factory-plan COUNT=1 FACTORY_WORKSPACE=/var/lib/shadowops/cka-factory-staging
+# With provisioned restricted runtime secrets and explicit operator authorization:
+make factory-execute COUNT=1 TYPE=deployment_scale FACTORY_WORKSPACE=/var/lib/shadowops/cka-factory-staging
+# Generated data is in /var/lib/shadowops/cka-factory-staging/scenarios/generated
+python -m cka_sim audit-proposals --directory /var/lib/shadowops/cka-factory-staging/scenarios/generated
 ```
 
 **Safety caps per shared persistent installation:** one-shot invocation,
 1–2 inferencing attempts per run, at most 5 attempts per UTC day (failures
 count), and at most 5 proposals retained in quarantine. Concurrent factory
-calls refuse to run; the advisory lock and daily budget are under `.local/`.
-Corrupt or future-dated budget state fails closed. An operator must preserve
-both `.local/factory-budget.json` and `scenarios/generated/` across
-deployments, otherwise these are NOT durable quotas. External Cloudflare
+calls refuse to run; the advisory lock and daily budget are under
+`<FACTORY_WORKSPACE>/.local/`. Generated YAML remains strictly inside
+`<FACTORY_WORKSPACE>/scenarios/generated/`. The workspace must be a
+pre-existing **absolute directory**, not a symlink or a path traversing
+symlinks, with no symlink intermediates in its managed directories.
+It cannot be mixed with individually overridden paths, keeping the lock,
+budget and quarantine in the same persistence domain.
+
+**Staging must keep the application checkout read-only**, writable only
+in the dedicated, least-privilege service account's persistent workspace.
+The workspace path is explicitly passed with `FACTORY_WORKSPACE` or
+`--workspace`. Omitting it retains the existing local-development defaults.
+Changing to another workspace creates a different **local budget scope**, so
+the host service configuration must pin one immutable path. This is NOT a
+distributed or cloud billing quota. Corrupt or future-dated budget state
+fails closed. Preserve both `.local/factory-budget.json` and
+`scenarios/generated/` in this workspace across deployments.
+External Cloudflare
 account limits, billing controls and monitoring are additionally required.
 Never scale this local quota across instances and assume a global cap.
 
