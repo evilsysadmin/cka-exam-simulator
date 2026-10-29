@@ -106,6 +106,16 @@ def test_selector_grading_requires_correct_selector_and_backends(bank):
                            endpoint_slices=ready).passed
 
 
+def test_endpoint_slice_with_null_endpoints_is_unsolved_not_an_error(bank):
+    s = bank["fix-catalog-service"]
+    deployment = {"spec": {"replicas": s.target_replicas}}
+    service = {"spec": {"selector": {"app": s.target_selector}}}
+    for slices in ({"items": [{"endpoints": None}]}, {"items": None}, {"items": []}):
+        grade = grade_state(s, deployment=deployment, service=service, endpoint_slices=slices)
+        assert grade.passed is False
+        assert grade.checks[1] == {"name": "Backends listos", "passed": False}
+
+
 def test_ollama_receives_json_schema(bank):
     seen = {}
     def handler(request):
