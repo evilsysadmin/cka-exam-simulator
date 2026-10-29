@@ -171,7 +171,8 @@ def test_poc_endpoint_is_off_by_default_and_does_not_enable_lab(material, monkey
     bad = client.get("/api/dev/identity/poc/me",
                      headers={**headers, "Authorization": "Bearer " + signed(Ed25519PrivateKey.generate(), claims)})
     assert bad.status_code == 401
-    assert "token" not in json.dumps(bad.json()).lower()
+    assert bad.json() == {"detail": "Staging identity token rejected"}
+    assert token not in json.dumps(bad.json())
     # The PoC flag never activates the existing developer Kubernetes endpoints.
     assert client.post("/api/dev/scenarios/scale-payment-api/setup",
                        headers={"X-CKA-Lab-Request": "1"}).status_code == 403
