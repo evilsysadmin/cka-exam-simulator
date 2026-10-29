@@ -7,6 +7,7 @@ This module verifies signatures, not user enrolment or session revocation.
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import time
 import uuid
@@ -55,8 +56,8 @@ def _decode(value: str, limit: int) -> bytes:
     if not isinstance(value, str) or not value or len(value) > limit * 2:
         _reject()
     try:
-        decoded = base64.b64decode(value, altchars=b"-_", validate=True)
-    except (ValueError, base64.binascii.Error):
+        decoded = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
+    except (ValueError, binascii.Error):
         _reject()
     if len(decoded) > limit or base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii") != value:
         _reject()
