@@ -1,9 +1,12 @@
 """Loopback-only developer preview API. Never deploy to an untrusted network."""
 import os
+import stat
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .catalog import load_bank
+from .identity_poc import IdentityPoCError, verify_staging_cka_token
 from .kube import LabError, execute_dev_kubectl, grade, setup
 from .session import SessionError, get_session, require_session, start_session
 
@@ -21,6 +24,40 @@ def dev_only(request: Request) -> None:
 @app.get("/api/health")
 def health():
     return {"status": "ok", "mode": "local-development"}
+
+
+@app.get("/api/dev/identity/poc/me")
+def local_identity_poc(request: Request):
+    """Opt-in loopback-only cryptographic handshake. No user session or lab grant."""
+    peer = request.client.host if request.client else ""
+    if (os.getenv("CKA_IDENTITY_POC_ENABLED") != "1"
+            or peer not in ("127.0.0.1", "::1", "testclient")
+            or request.headers.get("X-CKA-Identity-PoC") != "1"):
+        raise HTTPException(404, detail="Identity PoC disabled")
+
+    # The public JWKS file must be provisioned explicitly by the local
+    # developer, never selected by a request parameter or remote JWT header.
+    filename = os.getenv("CKA_IDENTITY_POC_JWKS_FILE", "")
+    if not filename or not Path(filename).is_absolute():
+        raise HTTPException(503, detail="Identity PoC trust keys unavailable")
+    try:
+        info = os.lstat(filename)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 16_384:
+            raise OSError("unsafe JWKS file")
+        with open(filename, "rb") as source:
+            jwks = source.read(16_385)
+    except OSError:
+        raise HTTPException(503, detail="Identity PoC trust keys unavailable") from None
+
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer ") or len(authorization) > 4110:
+        raise HTTPException(401, detail="Staging identity token rejected")
+    try:
+        subject = verify_staging_cka_token(authorization[7:], jwks=jwks)
+    except IdentityPoCError:
+        raise HTTPException(401, detail="Staging identity token rejected") from None
+
+    return {"sub": subject, "aud": "cka-simulator", "status": "signature-only-poc"}
 
 
 @app.get("/api/scenarios")
