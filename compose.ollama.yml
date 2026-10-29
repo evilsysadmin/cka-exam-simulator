@@ -1,0 +1,19 @@
+# Isolated scenario-generator service; NEVER contains kubectl or the CKA runner.
+# Only host loopback reaches port 11434. CPU works out of the box.
+services:
+  ollama:
+    image: ollama/ollama:${OLLAMA_TAG:-latest}
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+volumes:
+  ollama-models:

@@ -1,5 +1,6 @@
 """Ollama generates DSL data, never scripts, manifests or graders."""
 import os
+from urllib.parse import urlsplit
 import httpx
 from .models import Scenario
 
@@ -24,6 +25,11 @@ def generate(*, model: str, scenario_type: str = "deployment_scale",
     if not model or len(model) > 120:
         raise ValueError("Invalid model")
     url = (base_url or os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")).rstrip("/")
+    parts = urlsplit(url)
+    if (parts.scheme != "http" or parts.hostname not in ("localhost", "127.0.0.1", "::1")
+            or parts.username or parts.password or parts.query or parts.fragment
+            or parts.path not in ("", "/")):
+        raise GenerationError("Ollama must be accessed through a local loopback URL")
     payload = {
         "model": model, "system": SYSTEM,
         "prompt": f"Generate one varied CKA lab of type {scenario_type}.",

@@ -1,10 +1,12 @@
 import json
 
+import yaml
+
 import httpx
 import pytest
 from pydantic import ValidationError
 
-from cka_sim.catalog import load_bank, save_generated
+from cka_sim.catalog import load_bank, load_proposal, save_generated
 from cka_sim.grading import grade_state
 from cka_sim.models import Scenario
 from cka_sim.ollama import GenerationError, generate
@@ -88,12 +90,63 @@ def test_candidate_cannot_see_private_fixture(bank):
 
 
 def test_generated_proposal_quarantine(bank, tmp_path):
-    s = bank["scale-payment-api"]
+    data = bank["scale-payment-api"].model_dump(mode="json")
+    data.update(slug="generated-payments", namespace="cka-generated-payments")
+    s = Scenario.model_validate(data)
     output = save_generated(s, tmp_path / "generated")
-    assert json.loads(output.read_text())["slug"] == s.slug
+    assert output.suffix == ".yaml"
+    assert yaml.safe_load(output.read_text())["slug"] == s.slug
+    assert load_proposal(output) == s
     with pytest.raises(FileExistsError):
         save_generated(s, tmp_path / "generated")
     assert not (tmp_path / f"{s.slug}.json").exists()
+
+
+@pytest.mark.parametrize("invalid", [
+    "slug: fake\\nslug: repeated\\n",
+    "!!python/object/apply:os.system ['id']",
+    "anchor: &a value\\nref: *a\\n",
+    "---\\nslug: foo\\n---\\nslug: bar\\n",
+])
+def test_proposal_yaml_rejects_unsafe_syntax(tmp_path, invalid):
+    path = tmp_path / "proposal-example.yaml"
+    path.write_text(invalid.replace("\\n", "\n"))
+    with pytest.raises((ValueError, ValidationError)):
+        load_proposal(path)
+
+
+def test_proposal_yaml_rejects_extra_fields_and_curated_identity(bank, tmp_path):
+    s = bank["scale-payment-api"]
+    data = s.model_dump(mode="json")
+    data["grader_code"] = "exit(0)"
+    file = tmp_path / f"{s.slug}.yaml"
+    file.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValidationError):
+        load_proposal(file)
+    data.pop("grader_code")
+    file.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValueError, match="collides"):
+        load_proposal(file)
+
+
+def test_proposal_yaml_rejects_namespace_reuse_and_size(bank, tmp_path):
+    original = bank["scale-payment-api"].model_dump(mode="json")
+    original.update(slug="new-lab", namespace="cka-new-lab")
+    s = Scenario.model_validate(original)
+    directory = tmp_path / "generated"
+    output = save_generated(s, directory)
+    colliding = Scenario.model_validate({**original, "slug": "newer-lab"})
+    with pytest.raises(ValueError, match="namespace"):
+        save_generated(colliding, directory)
+    output.write_text("a" * 17_000)
+    with pytest.raises(ValueError, match="size"):
+        load_proposal(output)
+
+
+def test_ollama_rejects_external_url_before_any_request():
+    with pytest.raises(GenerationError, match="loopback"):
+        generate(model="test", base_url="https://remote.example:11434")
+
 
 
 def test_scale_grading_requires_availability(bank):
