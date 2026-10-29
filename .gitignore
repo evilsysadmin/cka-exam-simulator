@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.local/
+.env
+node_modules/
+dist/
+scenarios/generated/
+*.egg-info/

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "slug": "scale-payment-api",
+  "title": "Caída de capacidad en pagos",
+  "story": "El equipo de pagos detecta saturación durante el cierre de jornada. La plataforma necesita recuperar la capacidad pactada sin sustituir el workload.",
+  "difficulty": "easy",
+  "minutes": 6,
+  "namespace": "cka-payments",
+  "deployment": "payment-api",
+  "scenario_type": "deployment_scale",
+  "initial_replicas": 1,
+  "target_replicas": 3,
+  "initial_selector": "payment-api",
+  "target_selector": "payment-api"
+}
