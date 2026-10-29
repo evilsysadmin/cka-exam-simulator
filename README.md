@@ -162,6 +162,23 @@ operator must independently inspect the packet and prepare a separate Git PR
 adding the reviewed scenario to `scenarios/` before it can become public.
 No automatic publication or deployment is performed.
 
+To prepare a **separate, human-authored Git PR** from that unchanged review
+packet, run `make scenario-pr-bundle SLUG=<slug>`. The CLI rechecks the
+complete live verification batch, source SHA-256, review-packet status and
+validated scenario content; it refuses changed YAML, tampered packets and
+existing bundle output. It creates a private `.local/pr-bundles/<slug>/`
+folder containing a curated-format `<slug>.json` and `PR_REVIEW.txt`.
+The tracked `scenarios/` bank is **never** written by this command; an
+operator must review and explicitly copy the JSON into a new Git branch,
+then create a PR. The operator label and local evidence remain unauthenticated.
+
+After any human-approved JSON enters a PR, CI now runs
+`python -m cka_sim lab-smoke-all`: it discovers **every** tracked curated
+scenario, proves the initial lab fails and the trusted fix passes in the
+disposable `kind-cka-dev` cluster. Newly added scenarios cannot bypass the
+live smoke simply because the CI list was not updated. On failure the PR
+remains blocked; neither generator nor PR preparation is a publication API.
+
 Currently both AI providers support `deployment_scale` and `service_selector`
 only; the CPU-resource scenario is curated until its generator quality gates
 are extended. `COUNT` is limited to 1–20 per invocation. Partial batches can

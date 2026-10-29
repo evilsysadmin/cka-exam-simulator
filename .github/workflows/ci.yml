@@ -28,6 +28,8 @@ jobs:
           make -n scenario-verify
           make -n scenario-review-queue
           make -n scenario-prepare-review SLUG=example SHA256=placeholder REVIEWER=operator
+          make -n scenario-pr-bundle SLUG=example
+          make -n scenario-smoke-all
           make -n scenario-validate PROPOSAL=scenarios/generated/sample.yaml
           make -n scenario-smoke PROPOSAL=scenarios/generated/sample.yaml
 
@@ -70,9 +72,7 @@ jobs:
         run: python -m cka_sim lab-up
       - name: Prove every curated scenario starts broken and can be solved
         run: |
-          python -m cka_sim lab-smoke scale-payment-api
-          python -m cka_sim lab-smoke fix-catalog-service
-          python -m cka_sim lab-smoke recover-scheduler-capacity
+          python -m cka_sim lab-smoke-all
       - name: Smoke a quarantined generated proposal through the verification gate
         run: |
           python - <<'PY'
