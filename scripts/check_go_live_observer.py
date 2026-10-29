@@ -78,10 +78,10 @@ def mint_scoped_config(s, directory: Path) -> Path:
 
 def verify_real_rbac(s, config: Path):
     def can_i(verb, resource, *, namespace=None, resource_name=None):
+        # kubectl auth can-i v1.35 accepts TYPE/NAME, not --resource-name.
+        resource_spec = resource + ("/" + resource_name if resource_name else "")
         args = ["kubectl", "--kubeconfig", str(config), "--context", CONTEXT,
-                "auth", "can-i", verb, resource, "-n", namespace or s.namespace]
-        if resource_name:
-            args.append("--resource-name=" + resource_name)
+                "auth", "can-i", verb, resource_spec, "-n", namespace or s.namespace]
         proc = subprocess.run(args, capture_output=True, text=True, timeout=25)
         if proc.returncode not in (0, 1) or proc.stdout.strip() not in ("yes", "no"):
             category = ("unknown-option" if "unknown flag" in proc.stderr
