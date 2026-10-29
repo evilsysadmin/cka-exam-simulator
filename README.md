@@ -107,17 +107,30 @@ The report can be redirected to a local file under `.local/` if desired.
 `make scenario-validate` checks **structure and policy only**; it does not
 guarantee a working Kubernetes scenario.
 
-To test a proposal in a real disposable cluster, intentionally run:
+To test proposals in a real disposable cluster, intentionally run:
 
 ```bash
 make lab-up
 make scenario-smoke PROPOSAL=scenarios/generated/<generated-slug>.yaml
+# Or verify up to five offline-audited proposals sequentially:
+make scenario-verify
+cat .local/proposal-verification.json
 make lab-down
 ```
 
 The smoke test reuses **trusted fixture templates and deterministic graders**,
 proves the initial state fails, applies the canonical repair and waits for the
-graded result to pass, then cleans the namespace. This is a **manual local**
+graded result to pass, then cleans the namespace. `scenario-verify` first
+requires **every** quarantined YAML to pass the offline audit; if any fail,
+no Kubernetes commands run. It refuses batches larger than five and uses only
+the fixed `scenarios/generated` quarantine and the dedicated `kind-cka-dev`
+context. It halts after the first failed live smoke (to avoid continuing on
+a potentially dirty cluster) and writes an atomic, local-only verification
+report with immutable YAML SHA-256 references, generic failure codes, and a
+`needs-human-review` status for each success. Changes to YAML during the
+smoke invalidate success. No raw model output or Kubernetes diagnostic text
+is included in the JSON evidence. The live verification does **not** start or
+delete a cluster, so the operator remains responsible for the dedicated lab. This is a **manual local**
 step (not performed by `make scenario-generate`). Only the fixed
 `kind-cka-dev` context is used. Do not run another lab concurrently.
 A reviewed, smoke-tested proposal must still be **manually promoted** to the

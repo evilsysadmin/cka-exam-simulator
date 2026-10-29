@@ -25,6 +25,7 @@ jobs:
           make -n scenario-generate PROVIDER=workers-ai COUNT=2
           make -n scenario-audit
           make -n scenario-batch PROVIDER=workers-ai COUNT=2
+          make -n scenario-verify
           make -n scenario-validate PROPOSAL=scenarios/generated/sample.yaml
           make -n scenario-smoke PROPOSAL=scenarios/generated/sample.yaml
 
@@ -70,6 +71,27 @@ jobs:
           python -m cka_sim lab-smoke scale-payment-api
           python -m cka_sim lab-smoke fix-catalog-service
           python -m cka_sim lab-smoke recover-scheduler-capacity
+      - name: Smoke a quarantined generated proposal through the verification gate
+        run: |
+          python - <<'PY'
+          import json
+          from cka_sim.catalog import load_bank, save_generated
+          from cka_sim.models import Scenario
+          source = load_bank()["scale-payment-api"].model_dump(mode="json")
+          source.update(slug="ci-generated-scale", namespace="cka-ci-generated-scale",
+                        story="Live cluster check for fresh workloads before capacity peaks.")
+          save_generated(Scenario.model_validate_json(json.dumps(source)))
+          PY
+          python -m cka_sim verify-proposals
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path(".local/proposal-verification.json").read_text())
+          assert report["passed"] and report["verified"] == 1
+          assert report["requires_human_review"] is True
+          assert report["entries"][0]["status"] == "needs-human-review"
+          assert not Path("scenarios/ci-generated-scale.json").exists()
+          PY
       - name: Print cluster diagnostics if smoke fails
         if: failure()
         run: |
