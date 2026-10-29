@@ -37,16 +37,16 @@ def test_clock_survives_browser_refresh_and_locks_terminal_at_expiry(local_clock
     assert response.status_code == 200
     original = response.json()["session"]
     assert original["scenario_slug"] == SCALE
-    assert original["remaining_seconds"] == 300
+    assert original["remaining_seconds"] == 360
     assert original["phase"] == "active"
     assert original["expires_at"].endswith("+00:00")
     local_clock[0] += 70
     restored = client.get("/api/dev/session", headers=HEADERS).json()["session"]
-    assert restored["remaining_seconds"] == 230
+    assert restored["remaining_seconds"] == 290
     assert restored["expires_at"] == original["expires_at"]
     command = {"command": "kubectl get pods"}
     assert client.post("/api/dev/terminal/command", headers=HEADERS, json=command).status_code == 200
-    local_clock[0] += 230
+    local_clock[0] += 290
     assert client.get("/api/dev/session", headers=HEADERS).json()["session"]["phase"] == "expired"
     assert client.post("/api/dev/terminal/command", headers=HEADERS, json=command).status_code == 409
     assert client.post(f"/api/dev/scenarios/{SCALE}/grade", headers=HEADERS).json()["score"] == 100
@@ -72,5 +72,5 @@ def test_late_setup_starts_fresh_time(local_clock):
     client.post(f"/api/dev/scenarios/{SCALE}/setup", headers=HEADERS)
     local_clock[0] += 400
     response = client.post(f"/api/dev/scenarios/{SCALE}/setup", headers=HEADERS)
-    assert response.json()["session"]["remaining_seconds"] == 300
+    assert response.json()["session"]["remaining_seconds"] == 360
     assert response.json()["session"]["phase"] == "active"
