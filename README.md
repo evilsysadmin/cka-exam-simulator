@@ -224,6 +224,29 @@ public runner or auto-publishing is enabled by this source change.
 See [OCI A1 factory handoff](docs/oci-a1-scenario-factory.md) for staging
 environment requirements, persistence, budget and ownership gates.
 
+## Go migration (in progress)
+
+The new `go/` module is the first safe, independently tested step toward a
+**Go-first backend and an ARM64 OCI runtime**. Its standard-library-only
+scenario validator accepts the three curated JSON exercises and rejects
+unknown fields, invalid names, unsafe prompt text and unsound initial states.
+It does not run Kubernetes, serve HTTP or publish AI proposals.
+
+```bash
+cd go
+go test ./...
+go run ./cmd/cka-scenarios -bank ../scenarios
+```
+
+The separate **Go scenario contract** CI builds a Linux ARM64 executable
+without CGO, in addition to running Go tests and static analysis. For now
+the existing **Python backend is still authoritative** for hands-on labs and
+grading; this is intentionally not a big-bang rewrite. The shared scenario
+DSL, reviewed YAML quarantine and live-kind acceptance remain mandatory.
+
+See [Go migration plan](docs/go-migration.md) for the incremental sequence,
+test gates, security boundaries and future `client-go` handoff.
+
 ## Roadmap
 
 1. Reliable VM-backed per-user ephemeral runner, auth, quotas and isolation.
