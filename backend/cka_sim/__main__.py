@@ -66,6 +66,7 @@ def main() -> None:
     factory.add_argument("--type", choices=["deployment_scale", "service_selector"],
                          default="deployment_scale")
     factory.add_argument("--model", default=None)
+    factory.add_argument("--workspace", type=Path, default=None)
     auditor = commands.add_parser("audit-proposals")
     auditor.add_argument("--directory", type=Path, default=PROPOSALS)
     commands.add_parser("verify-proposals")
@@ -106,6 +107,8 @@ def main() -> None:
                        "scenario_type": args.type}
             if args.model is not None:
                 options["model"] = args.model
+            if args.workspace is not None:
+                options["workspace"] = args.workspace
             print(json.dumps(run_factory(**options), indent=2, ensure_ascii=False))
         elif args.command == "audit-proposals":
             result = audit_proposals(args.directory)
