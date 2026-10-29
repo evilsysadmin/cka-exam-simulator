@@ -10,6 +10,7 @@ from .catalog import PROPOSALS, load_bank, load_proposal, save_generated
 from .kube import LabError, cleanup, create_lab, delete_lab, grade, kubectl, setup, solve_for_smoke
 from .ollama import GenerationError
 from .providers import SUPPORTED_PROVIDERS, default_model, generate
+from .pr_bundle import prepare_pr_bundle
 from .quality import audit_proposals
 from .review import review_queue
 from .review_drafts import prepare_review_draft
@@ -62,6 +63,9 @@ def main() -> None:
     auditor.add_argument("--directory", type=Path, default=PROPOSALS)
     commands.add_parser("verify-proposals")
     commands.add_parser("review-queue")
+    bundle = commands.add_parser("prepare-pr-bundle")
+    bundle.add_argument("--slug", required=True)
+    commands.add_parser("lab-smoke-all")
     review = commands.add_parser("prepare-review")
     review.add_argument("--slug", required=True)
     review.add_argument("--sha256", required=True)
@@ -105,6 +109,16 @@ def main() -> None:
                 raise SystemExit(1)
         elif args.command == "review-queue":
             print(json.dumps(review_queue(), indent=2, ensure_ascii=False))
+        elif args.command == "prepare-pr-bundle":
+            folder = prepare_pr_bundle(slug=args.slug)
+            print(f"PR candidate bundle (NOT PUBLISHED): {folder}")
+        elif args.command == "lab-smoke-all":
+            bank = load_bank()
+            if not bank:
+                raise ValueError("No curated scenarios found")
+            for s in bank.values():
+                _smoke_scenario(s)
+            print(f"PASS: all {len(bank)} curated scenarios passed live kind smoke")
         elif args.command == "prepare-review":
             path = prepare_review_draft(slug=args.slug,
                                         approved_sha256=args.sha256,
