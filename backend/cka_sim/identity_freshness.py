@@ -90,6 +90,13 @@ def verify_current_staging_cka_session(
         # responses and timeouts are all denial, never an auth bypass.
         _reject()
 
+    # A bounded authority call may still cross token expiry. Check real time
+    # again; injected deterministic clocks keep the offline contract stable.
+    if now is None:
+        current = int(time.time())
+        if payload["exp"] <= current:
+            _reject()
+
     if type(evidence) is not SessionFreshnessEvidence:
         _reject()
     if (

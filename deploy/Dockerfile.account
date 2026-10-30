@@ -1,0 +1,17 @@
+FROM python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f AS dependencies
+COPY deploy/account-requirements.txt /requirements.txt
+RUN pip install --no-cache-dir --only-binary=:all: --target=/opt/runtime -r /requirements.txt
+
+FROM python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f
+ARG SOURCE_SHA
+LABEL org.opencontainers.image.source="https://github.com/evilsysadmin/cka-exam-simulator"
+LABEL org.opencontainers.image.revision=$SOURCE_SHA
+ENV CKA_ACCOUNT_BUILD_SHA=$SOURCE_SHA PYTHONPATH=/opt/runtime:/app PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY --from=dependencies /opt/runtime /opt/runtime
+WORKDIR /app
+# No developer API, factory, scenarios, Kubernetes libraries or CLI are copied.
+COPY backend/cka_sim/__init__.py backend/cka_sim/account_api.py backend/cka_sim/identity_poc.py backend/cka_sim/identity_freshness.py backend/cka_sim/identity_transport.py /app/cka_sim/
+USER 65532:65532
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=4 CMD ["python", "-c", "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8080/readyz',headers={'Host':'cka-api-staging.shadowops.dpdns.org'}); urllib.request.urlopen(r,timeout=3).close()"]
+ENTRYPOINT ["python", "-m", "uvicorn", "cka_sim.account_api:configured_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--no-access-log", "--no-proxy-headers", "--limit-concurrency", "16", "--timeout-keep-alive", "5"]
