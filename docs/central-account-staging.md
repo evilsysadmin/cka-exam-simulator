@@ -39,3 +39,19 @@ Acceptance requires the admitted signed multiarch image, a recent Identity
 backup, explicit CKA consumer registration, exact-source API/Pages receipts,
 and real desktop/mobile login, cross-product silent SSO and logout/revocation
 tests. Labs remain unavailable after successful account authentication.
+
+## Browser build
+
+`npm run build:account-staging` produces only `dist-account-staging`, with
+mode `account-staging-preview`. Account UI runs solely at the exact staging
+origin; the ordinary `build:public` remains the static demo without account
+requests. No password form, tokens in storage/URLs or SOC is shipped. The
+client calls central token exchange using only Content-Type and checks the
+account API with Authorization only; all grants come from the backend.
+
+The UI checks on entry, visibility and each visible minute. Logout cancels old
+checks and blocks silent restoration; it reports success only after Identity
+returns 204. A failed logout remains visible and can be retried. The browser
+smoke uses actual built React UI with explicitly synthetic service responses
+at desktop and mobile sizes; live cross-product SSO requires separate public
+acceptance after Infra deployment.

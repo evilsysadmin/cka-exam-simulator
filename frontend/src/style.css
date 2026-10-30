@@ -91,3 +91,8 @@ h1 em{color:#77e6b9;font-style:normal}
 @media(max-width:880px){.workspace{grid-template-columns:1fr}.sidebar{border-right:0;border-bottom:1px solid #283c49}.sidebar-footer{margin-top:14px}.main{padding:25px 14px}.topbar{padding:0 15px}.run-overview{display:none}.lab{padding:20px 14px}}
 @media(max-width:500px){.brand-subtitle{font-size:8px;letter-spacing:1px}.environment{display:none}.intro{margin-bottom:22px}.lab-header{gap:7px}.lab h2{font-size:21px}.clock{min-width:106px}.clock strong{font-size:25px}.console-kind{display:none}.action-buttons{width:100%}.action-buttons button{flex:1}.mission{padding:13px}.footer{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+
+.account-access{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:22px;margin-bottom:22px;border:1px solid #3c665e;border-radius:12px;background:#102820}
+.account-copy{min-width:0}.account-copy h2{font-size:23px;margin:8px 0}.account-copy p{color:#b6cdc6;font-size:13px;line-height:1.6;margin:6px 0}.account-copy .account-status{color:#8fe0bb}
+.account-actions{display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0}.account-actions a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;min-height:44px}.account-actions button{min-height:44px}
+@media(max-width:880px){.account-access{align-items:flex-start;flex-direction:column;gap:12px}.account-actions{width:100%}.account-actions>*{flex:1}}
