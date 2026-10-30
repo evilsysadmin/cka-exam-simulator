@@ -2,6 +2,19 @@
 
 An experimental **hands-on** Kubernetes CKA simulator with browser-based developer terminal, deterministic grading against live cluster state and optional local Ollama scenario proposals.
 
+## Central account staging handoff (not yet deployed)
+
+A separate account-only API now verifies the staging Identity JWT and performs
+an authenticated, audience-bound live revocation check on every `/api/account/me`.
+It uses the same central UUID without a CKA password, profile database or lab grant.
+Its isolated image excludes the developer API, Kubernetes and scenario factory.
+Deployment and browser integration remain an Infra-owned staging handoff;
+see [central account contract](docs/central-account-staging.md).
+
+The older sections below document the offline PoC milestones. Their references
+to an unwired Identity bootstrap describe those earlier proofs, not the current
+independent Identity pilot already used by Chronicles.
+
 ## ShadowOps Identity: first local verifier PoC (NOT login)
 
 CKA now has an **opt-in, loopback-only verification handshake**, `GET /api/dev/identity/poc/me`. It proves only that a staging JWT is signed by a **pre-pinned local public JWKS**, uses `iss=https://id-staging.shadowops.dpdns.org`, `aud=cka-simulator`, has a canonical UUIDv4 `sub` and valid `iat/nbf/exp` (maximum 1 hour). Both the issuer and audience are fixed in code; JWT headers cannot select a remote key source. Ed25519 signature and JWKS type, `kid`, duplicates, canonical encoding and timing are checked fail-closed. The endpoint returns a subject UUID and a **`signature-only-poc`** label, never a session or an authorization grant.
