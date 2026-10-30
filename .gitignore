@@ -4,7 +4,10 @@ __pycache__/
 .pytest_cache/
 .local/
 .env
-node_modules/
+node_modules
 dist/
 scenarios/generated/
 *.egg-info/
+frontend/dist-public/
+frontend/dist-account-staging/
+frontend/account-captures/

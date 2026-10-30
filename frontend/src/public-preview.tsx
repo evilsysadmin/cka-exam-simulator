@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import { AccountAccess } from './AccountAccess'
+import { accountEnabled } from './identitySession'
+const centralAccount = accountEnabled(import.meta.env.VITE_SHADOWOPS_IDENTITY, location.origin)
 
 const cases = [
   { slug: 'scale-payment-api', title: 'Caída de capacidad en pagos', domain: 'workloads', minutes: 6,
@@ -39,6 +42,7 @@ function Preview() {
         no hay Kubernetes ni consola ejecutable en este dominio. Los laboratorios se habilitarán
         cuando existan autenticación y aislamiento seguro por sesión.
       </div>
+      {centralAccount && <AccountAccess/>}
       <div className="workspace">
         <aside className="sidebar">
           <div className="section-heading"><span>SCENARIO BANK</span><span className="count">{String(cases.length).padStart(2,'0')}</span></div>

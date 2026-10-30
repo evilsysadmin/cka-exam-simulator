@@ -129,6 +129,23 @@ jobs:
       - run: npm run test:public
         working-directory: frontend
 
+      - run: npm run test:account
+        working-directory: frontend
+      - run: npm run build:account-staging
+        working-directory: frontend
+      - name: Install pinned account browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Real account UI at desktop and touch sizes (synthetic service responses)
+        working-directory: frontend
+        run: npm run test:account-browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cka-account-ui-${{ github.sha }}
+          path: frontend/account-captures/
+          if-no-files-found: error
+
   kind-smoke:
     name: Live Kubernetes scenario smoke
     runs-on: ubuntu-latest
