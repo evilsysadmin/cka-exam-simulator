@@ -29,7 +29,9 @@ def private_identity_tls(ca_pem: str) -> ssl.SSLContext:
 
 class IdentityFreshnessClient:
     def __init__(self, credential: str, *, transport: httpx.BaseTransport | None = None,
-                 tls_context: ssl.SSLContext | None = None):
+                 tls_context: ssl.SSLContext | None = None, public_staging: bool = False):
+        if type(public_staging) is not bool or (public_staging and tls_context is not None):
+            _reject()
         if not isinstance(credential, str) or not re.fullmatch(r"soc1_[A-Za-z0-9_-]{43}", credential):
             _reject()
         if len(_decode(credential[5:], 32)) != 32:
@@ -37,6 +39,10 @@ class IdentityFreshnessClient:
         self._credential = credential
         self._transport = transport
         self._tls = tls_context if tls_context is not None else True
+        # The separate rootless lab network cannot join the private IdP bridge.
+        # This explicit mode uses the same fixed staging authority over public
+        # HTTPS with normal hostname/CA verification, never an arbitrary URL.
+        self._url = STAGING_ISSUER + "/api/identity/freshness" if public_staging else FRESHNESS_URL
 
     def __call__(self, subject: str, version: int, jti: str) -> SessionFreshnessEvidence:
         # A new client prevents a response cookie from becoming authority on a
@@ -44,7 +50,7 @@ class IdentityFreshnessClient:
         started = time.monotonic()
         with httpx.Client(timeout=2.0, follow_redirects=False, trust_env=False,
                           transport=self._transport, verify=self._tls) as client:
-            with client.stream("POST", FRESHNESS_URL,
+            with client.stream("POST", self._url,
                                headers={"Host": IDENTITY_HOST, "Authorization": "Bearer " + self._credential,
                                         "Content-Type": "application/json",
                                         "Accept-Encoding": "identity"},
@@ -67,3 +73,4 @@ class IdentityFreshnessClient:
         if set(data) != fields | {"audience"} or data.pop("audience") != CKA_AUDIENCE:
             _reject()
         return SessionFreshnessEvidence(**data)
+
