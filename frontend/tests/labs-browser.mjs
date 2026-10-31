@@ -23,7 +23,7 @@ let last
 try{
   for(const [name,width,height,mobile] of [['desktop',1440,1000,false],['mobile',390,844,true]]){
     const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile})
-    let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0
+    let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0,capabilityFailure=null
     await context.route('**/*',async route=>{
       const req=route.request(),url=new URL(req.url())
       if(url.origin===GAME){
@@ -48,6 +48,10 @@ try{
         const action=url.pathname.split('/').at(-1)
         if(!logged)return route.fulfill({status:401,json:{},headers})
         let result
+        if(action==='capabilities' && capabilityFailure){
+          const status=capabilityFailure; capabilityFailure=null
+          return route.fulfill({status,json:{},headers})
+        }
         if(action==='capabilities')result={labs_enabled:true,capacity:1,scenarios,current}
         else if(action==='prepare'){
           assert.equal(current,null)
@@ -73,7 +77,31 @@ try{
       await page.getByRole('button',{name:new RegExp(scenarios[index].title)}).click()
       await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).click()
       await page.getByRole('button',{name:'Finalizar intento',exact:true}).waitFor()
-      if(index===0){await page.reload();await page.getByRole('button',{name:'Finalizar intento',exact:true}).waitFor()}
+      if(index===0){
+        const terminal=await page.locator('.terminal-screen').elementHandle()
+        assert.ok(terminal)
+        // A transient failed background check must preserve the actual xterm
+        // node (and thus scrollback/input), even while a real lease is active.
+        for(const status of [503,409]){
+          capabilityFailure=status
+          await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+          await page.getByRole('alert').waitFor()
+          await page.waitForFunction(()=>!document.querySelector('.action-left')?.textContent?.includes('Comprobando'))
+          assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true)
+          await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+          await page.getByRole('alert').waitFor({state:'hidden'})
+        }
+        // Authentication denial, unlike transient outage, must remove the
+        // active terminal immediately and allow a fresh server-side recovery.
+        capabilityFailure=401
+        await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+        await page.locator('.terminal-screen').waitFor({state:'detached'})
+        await page.getByRole('region',{name:'Laboratorios CKA'}).getByText('Sesión o acceso al laboratorio no disponible.').waitFor()
+        await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+        await page.getByRole('button',{name:'Finalizar intento',exact:true}).waitFor()
+        await page.reload()
+        await page.getByRole('button',{name:'Finalizar intento',exact:true}).waitFor()
+      }
       await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click()
       await page.getByText(/Todavía no está resuelto/).waitFor()
       const input=page.locator('.xterm-helper-textarea');await input.focus()
