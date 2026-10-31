@@ -288,3 +288,37 @@ The current bank passes both languages. The code is not a production
 public service, grader or authentication system.
 
 No existing deployment, Python CLI, frontend, or OCI A1 runtime has changed.
+
+## Milestone 8: private controller pipe over the durable Go journal
+
+`go/cmd/cka-lease-stdio` now makes the existing Linux journal usable by the
+trusted Python lab controller without implementing a second lease store.
+It runs as one persistent child process over private stdin/stdout, with no
+listener, Kubernetes access or user-facing endpoint. Capacity is fixed to one.
+The caller must supply owner UUIDs only after fresh Identity authorization.
+
+The strict, bounded line protocol supports start/status/active scenario,
+finish/pending cleanup and cleanup confirmation. Duplicate/unknown fields,
+nested/nonstring values, uncurated scenarios, foreign owners and oversized
+requests are denied. A broken journal stops the process. Restart uses the
+journal's existing rule: every prior lease is closed and still occupies capacity
+until Kubernetes deletion has been independently verified and confirmed.
+
+`cka_sim.lease_process.LeaseProcess` owns that child, serializes bounded
+request/reply calls, enforces deadlines and reply schemas, and kills/poisons
+the adapter on framing, transport or journal failure. It never automatically
+restarts over an uncleaned lab. No password, JWT, SOC or Docker authority is
+sent through this pipe. The active scenario/cleanup methods are private
+controller data and must not be exposed as browser routes.
+
+Go race tests exercise the actual journal through the protocol, including
+owner isolation, capacity and restart recovery. CI compiles the real helper,
+runs the Python-to-Go persistence/cleanup handshake, and builds Linux ARM64.
+Local synthetic-pipe tests additionally cover timeouts, malformed/oversized
+replies and refusal to continue after journal failure.
+
+This wires the lease engine for the shared-A1 Compose pilot; it does not install
+that runtime, create Kubernetes namespaces, expose a terminal or grant lab
+access. Namespace preparation, candidate RBAC/admission/network policy,
+verified deletion, per-operation Identity authorization and browser acceptance
+remain separate controller responsibilities.

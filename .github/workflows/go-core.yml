@@ -41,6 +41,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Prove private Python-to-Go durable lease controller interoperability
+        run: |
+          set -euo pipefail
+          go build -trimpath -o "$RUNNER_TEMP/cka-lease-stdio" ./cmd/cka-lease-stdio
+          PYTHONPATH=../backend CKA_LEASE_BINARY="$RUNNER_TEMP/cka-lease-stdio" \
+            python -m unittest discover -s ../backend/tests -p test_lease_process.py -v
       - name: Prove identical Go/Python grading for curated Kubernetes snapshots
         run: |
           set -euo pipefail
@@ -80,3 +86,6 @@ jobs:
             ./cmd/cka-observe
           file "$RUNNER_TEMP/cka-go/cka-observe-linux-arm64" | grep -E 'ARM aarch64|ARM64|aarch64'
           file "$RUNNER_TEMP/cka-go/cka-grade-linux-arm64" | grep -E 'ARM aarch64|ARM64|aarch64'
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath \
+            -o "$RUNNER_TEMP/cka-go/cka-lease-stdio-linux-arm64" ./cmd/cka-lease-stdio
+          file "$RUNNER_TEMP/cka-go/cka-lease-stdio-linux-arm64" | grep -E 'ARM aarch64|ARM64|aarch64'
