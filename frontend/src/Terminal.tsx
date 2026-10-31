@@ -3,9 +3,9 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
-type Props = { onCommand: (command: string) => Promise<string>; scenario: string }
+type Props = { onCommand: (command: string) => Promise<string>; scenario: string; staging?: boolean }
 
-export default function TerminalPanel({ onCommand, scenario }: Props) {
+export default function TerminalPanel({ onCommand, scenario, staging = false }: Props) {
   const mount = useRef<HTMLDivElement | null>(null)
   const onCommandRef = useRef(onCommand)
   onCommandRef.current = onCommand
@@ -38,10 +38,10 @@ export default function TerminalPanel({ onCommand, scenario }: Props) {
     let busy = false
     let disposed = false
     const prompt = () => terminal.write('\r\n\x1b[32mcka@lab\x1b[0m:\x1b[34m~\x1b[0m$ ')
-    terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  LOCAL PREVIEW')
+    terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  ' + (staging ? 'STAGING' : 'LOCAL PREVIEW'))
     terminal.writeln('Scenario: ' + scenario)
     terminal.writeln('Allowed: kubectl get / describe / scale / patch / rollout / explain / set resources')
-    terminal.writeln('Try: kubectl get pods -A')
+    terminal.writeln(staging ? 'Prueba: kubectl get pods' : 'Try: kubectl get pods -A')
     prompt()
 
     const handle = async (line: string) => {
@@ -72,6 +72,7 @@ export default function TerminalPanel({ onCommand, scenario }: Props) {
           continue
         }
         if (key >= ' ' && key !== '\u007f' && key !== '\x1b') {
+          if (input.length >= 600) continue
           input += key
           terminal.write(key)
         }
@@ -84,7 +85,7 @@ export default function TerminalPanel({ onCommand, scenario }: Props) {
       window.removeEventListener('resize', resize)
       terminal.dispose()
     }
-  }, [scenario])
+  }, [scenario, staging])
 
-  return <div ref={mount} className="terminal-screen" aria-label="Terminal Kubernetes local" />
+  return <div ref={mount} className="terminal-screen" aria-label={staging ? 'Terminal Kubernetes' : 'Terminal Kubernetes local'} />
 }

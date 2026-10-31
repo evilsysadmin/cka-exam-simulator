@@ -133,17 +133,26 @@ jobs:
         working-directory: frontend
       - run: npm run build:account-staging
         working-directory: frontend
+      - run: npm run test:labs
+        working-directory: frontend
+      - run: npm run build:lab-staging
+        working-directory: frontend
       - name: Install pinned account browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
       - name: Real account UI at desktop and touch sizes (synthetic service responses)
         working-directory: frontend
         run: npm run test:account-browser
+      - name: Real staging lab UI at desktop and touch sizes (synthetic HTTP services)
+        working-directory: frontend
+        run: npm run test:labs-browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cka-account-ui-${{ github.sha }}
-          path: frontend/account-captures/
+          path: |
+            frontend/account-captures/
+            frontend/lab-captures/
           if-no-files-found: error
 
   kind-smoke:

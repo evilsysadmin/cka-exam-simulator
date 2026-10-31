@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccountSession, LOGIN_URL, type AccountState } from './identitySession'
 
-export function AccountAccess() {
+export function AccountAccess({ labsPilot = false, onStateChange }: { labsPilot?: boolean; onStateChange?: (state: AccountState) => void } = {}) {
   const [state, setState] = useState<AccountState>({ phase: 'checking' })
   const session = useRef<AccountSession | null>(null)
+  const changed = useRef(onStateChange)
+  changed.current = onStateChange
   useEffect(() => {
-    const current = new AccountSession(fetch, setState)
+    const current = new AccountSession(fetch, value => { setState(value); changed.current?.(value) })
     session.current = current
     void current.check()
     const timer = setInterval(() => { if (document.visibilityState === 'visible') void current.check() }, 60000)
@@ -20,7 +22,7 @@ export function AccountAccess() {
       <p className="account-status" role="status" aria-live="polite">{
         state.phase === 'checking' ? 'Comprobando tu sesión…' :
         state.phase === 'signing-out' ? 'Cerrando sesión en ShadowOps…' :
-        state.phase === 'authenticated' ? 'Cuenta ShadowOps conectada · laboratorios aún no disponibles' :
+        state.phase === 'authenticated' ? (labsPilot ? 'Cuenta ShadowOps conectada' : 'Cuenta ShadowOps conectada · laboratorios aún no disponibles') :
         state.error || 'No has iniciado sesión.'
       }</p>
     </div>
@@ -31,3 +33,4 @@ export function AccountAccess() {
     </div>
   </section>
 }
+
