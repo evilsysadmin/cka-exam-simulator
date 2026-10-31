@@ -342,3 +342,35 @@ owner-bound lease, use only candidate-scoped credentials, enforce output/deadlin
 budgets and retain Kubernetes RBAC/admission plus runtime/network isolation.
 The existing loopback developer terminal and public account-only API remain
 unchanged; this argument planner is not a public terminal endpoint.
+
+
+## Leased Kubernetes driver for the shared-A1 staging pilot
+
+The private `LeasedCluster` now connects validated curated scenarios and the
+capacity-one Go journal to actual Kubernetes operations. It creates a fresh
+random namespace with exact lease ownership labels, restricted Pod Security
+Admission, bounded memory/object quotas, and a candidate ServiceAccount/Role.
+Candidate credentials are expiring TokenRequests in temporary private files;
+commands use only their namespace Role and the bounded argument planner. No
+credential, fixture internals or admin configuration is returned to candidates.
+CPU requests are deliberately not quota-capped: the curated 16-CPU scheduling
+fault must remain an exercise, while the outer runtime limits actual CPU use.
+
+Both child pipes, input, output and lifetime are bounded. Nonzero exits and
+private Kubernetes errors are normalized without logging credentials. Grading
+reads live candidate-visible resources. Cleanup refuses foreign labels and
+uses a namespace UID deletion precondition, waits for actual deletion, and
+independently verifies absence before the caller can confirm journal cleanup.
+Missing/malformed API responses and timeout retain the occupied lease.
+
+CI tests the actual Go-journal -> provision -> initial failure -> scoped repair
+-> passing grade -> verified deletion flow for every curated exercise in the
+explicitly created disposable kind cluster. Negative checks use actual candidate
+tokens to deny foreign namespaces, Secrets, namespace listing, token minting,
+foreign writes and Pod creation; administrator Pod creation independently proves
+restricted admission. The script never chooses an ambient Kubernetes context.
+
+This is an internal driver, not an HTTP authorization boundary. It requires a
+serialized controller, fresh Identity and active lease ownership before each
+candidate operation. Runtime/egress isolation, the Compose deployment, public
+API/frontend integration and staging browser acceptance are still outstanding.
