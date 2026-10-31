@@ -1,7 +1,8 @@
-// Package examsession implements an internal, in-memory lease state machine.
+// Package examsession implements an internal lease state machine and a Linux
+// durable journal for trusted controllers.
 //
 // This package does NOT authenticate callers, provision Kubernetes resources,
-// or provide a durable session database. The owner UUID must come from a
+// or provide a public session API. The owner UUID must come from a
 // separate, fresh ShadowOps Identity authorization decision, NEVER an HTTP
 // user-supplied string. No public API may expose Store or CleanupPending.
 package examsession
