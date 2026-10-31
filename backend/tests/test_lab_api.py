@@ -97,6 +97,9 @@ def setup(material):
         authenticate=pilot_authorizer(jwks=material[1], credential="soc1_" + "A" * 43,
             pilot_subject=SUBJECT, transport=httpx.MockTransport(authority)), pilot_subject=SUBJECT)
     api = TestClient(create_lab_app(controller=controller, build="a" * 40), base_url="https://" + HOST)
+    # Tests drive the actor directly without running the ASGI lifespan.
+    # Simulate completed startup reconciliation; explicit unready coverage is below.
+    api.app.state.ready = True
     headers = {"Origin": ORIGIN, "Authorization": "Bearer " + signed(material[0], material[2])}
     return api, headers, controller, journal, cluster, state
 
@@ -217,3 +220,22 @@ def test_owner_recovers_an_attempt_after_reload_or_a_lost_prepare_response(mater
     state["revoked"] = False
     assert post(api, headers, "finish", id=current["session"]["id"]).status_code == 200
     assert post(api, headers, "capabilities").json()["current"] is None
+
+
+def test_unready_cluster_denies_all_lab_operations_before_identity_or_lease(material):
+    api, headers, controller, journal, cluster, state = setup(material)
+    api.app.state.ready = False
+    for action, data in [
+        ("capabilities", {}),
+        ("prepare", {"slug": "scale-payment-api"}),
+        ("status", {"id": "a" * 32}),
+        ("command", {"id": "a" * 32, "command": "kubectl get pods"}),
+        ("grade", {"id": "a" * 32}),
+        ("finish", {"id": "a" * 32}),
+    ]:
+        assert post(api, headers, action, **data).status_code == 503
+    assert state["calls"] == 0
+    assert journal.lease is None and cluster.calls == []
+    api.app.state.ready = True
+    assert post(api, headers, "capabilities").status_code == 200
+    assert state["calls"] == 1

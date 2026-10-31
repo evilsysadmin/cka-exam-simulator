@@ -142,6 +142,8 @@ def create_lab_app(*, controller, build, close=None):
         except (ValueError, TypeError, TimeoutError, RecursionError):
             return JSONResponse({"detail": "Invalid request"}, status_code=400)
         try:
+            if not app.state.ready:
+                return JSONResponse({"detail": "Laboratorio temporalmente no disponible"}, status_code=503)
             result = await run_in_threadpool(controller.operation, headers[0][7:], action,
                 identity=data.get("id"), slug=data.get("slug"), command=data.get("command"))
             return result
