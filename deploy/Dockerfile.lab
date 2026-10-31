@@ -1,0 +1,47 @@
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS journal
+ARG TARGETOS
+ARG TARGETARCH
+ENV GOTOOLCHAIN=local
+WORKDIR /src
+COPY go/go.mod go/go.sum ./
+RUN go mod download && go mod verify
+COPY go/ ./
+RUN test "$(go env GOVERSION)" = go1.27.3 && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' \
+    -o /out/cka-lease-stdio ./cmd/cka-lease-stdio
+
+FROM python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f AS dependencies
+ARG TARGETARCH
+COPY deploy/account-requirements.txt deploy/lab-requirements.txt /requirements/
+RUN pip install --no-cache-dir --only-binary=:all: --target=/opt/runtime -r /requirements/lab-requirements.txt
+RUN apt-get update && apt-get install --yes --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN case "$TARGETARCH" in \
+      arm64) checksum=58f82f9fe796c375c5c4b8439850b0f3f4d401a52434052f2df46035a8789e25 ;; \
+      amd64) checksum=a2e984a18a0c063279d692533031c1eff93a262afcc0afdc517375432d060989 ;; \
+      *) exit 1 ;; \
+    esac && \
+    curl --proto '=https' --tlsv1.2 --fail --location --retry 2 \
+      "https://dl.k8s.io/release/v1.35.0/bin/linux/${TARGETARCH}/kubectl" -o /kubectl && \
+    printf '%s  /kubectl\n' "$checksum" | sha256sum --check && chmod 0755 /kubectl
+
+FROM python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f
+ARG SOURCE_SHA
+LABEL org.opencontainers.image.source="https://github.com/evilsysadmin/cka-exam-simulator"
+LABEL org.opencontainers.image.revision=$SOURCE_SHA
+ENV CKA_LAB_BUILD_SHA=$SOURCE_SHA CKA_SCENARIO_SOURCE_ROOT=/app \
+    PYTHONPATH=/opt/runtime:/app PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY --from=dependencies /opt/runtime /opt/runtime
+COPY --from=dependencies /kubectl /usr/local/bin/kubectl
+COPY --from=journal /out/cka-lease-stdio /usr/local/bin/cka-lease-stdio
+WORKDIR /app
+COPY backend/cka_sim/__init__.py backend/cka_sim/models.py backend/cka_sim/catalog.py backend/cka_sim/render.py backend/cka_sim/grading.py /app/cka_sim/
+COPY backend/cka_sim/identity_poc.py backend/cka_sim/identity_freshness.py backend/cka_sim/identity_transport.py /app/cka_sim/
+COPY backend/cka_sim/lab_api.py backend/cka_sim/lab_controller.py backend/cka_sim/leased_kube.py backend/cka_sim/lease_process.py backend/cka_sim/candidate_kubectl.py /app/cka_sim/
+COPY scenarios/*.json /app/scenarios/
+# Compose uses UID 0 INSIDE the dedicated rootless namespace to read its 0600
+# private bind files. It drops every capability and enforces no-new-privileges.
+# The image default remains non-root for every other execution environment.
+USER 65532:65532
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=4 CMD ["python", "-c", "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8080/readyz',headers={'Host':'cka-labs-staging.shadowops.dpdns.org'}); urllib.request.urlopen(r,timeout=3).close()"]
+ENTRYPOINT ["python", "-m", "uvicorn", "cka_sim.lab_api:configured_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--no-access-log", "--no-proxy-headers", "--limit-concurrency", "8", "--timeout-keep-alive", "5"]

@@ -153,6 +153,9 @@ class LeasedCluster:
             raise ClusterUnavailable()
         self.admin, self.binary, self.scratch = admin_config, binary, scratch
 
+    def ready(self):
+        return self._admin(["get", "--raw", "/readyz"]).strip() == "ok"
+
     def _admin(self, args, *, body=None, timeout=12):
         return run_bounded([str(self.binary), "--kubeconfig", str(self.admin),
                             "--context", CONTEXT, "--request-timeout=8s", *args],

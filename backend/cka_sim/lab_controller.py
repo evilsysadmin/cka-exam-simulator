@@ -129,6 +129,8 @@ class LabController:
         if not self.lock.acquire(blocking=False):
             return False
         try:
+            if not self.cluster.ready():
+                return False
             for cleanup in self.leases.pending():
                 self._cleanup(cleanup)
             return True

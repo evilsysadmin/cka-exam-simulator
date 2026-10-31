@@ -62,6 +62,9 @@ class Cluster:
         self.broken = False
         self.prepare_broken = False
 
+    def ready(self):
+        return True
+
     def provision(self, identity, scenario):
         self.calls.append("provision")
         if self.prepare_broken:
