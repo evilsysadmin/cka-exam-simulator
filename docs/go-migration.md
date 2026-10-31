@@ -209,13 +209,51 @@ Go's race-enabled CI covers session ownership, expiration boundaries,
 repeated cleanup, failed entropy, global capacity, random namespace
 uniqueness and concurrent attempts for one/many owners.
 
-**Not yet safe for production:** Memory state is lost if the process
+**Memory store limitations:** Memory state is lost if the process
 restarts; no durable lease journal, cleanup retry engine, reservation
 recovery, per-tenant quotas, real Identity revocation/freshness enforcement,
 Kubernetes provisioner or user-facing API exists. Do not wire these methods
 to the public HTTP server before those independent gates are verified.
 A validated JWT signature alone **does not authorize** opening a lab, even
 if it contains a UUID matching the required input type.
+
+## Milestone 7: durable Linux controller lease journal
+
+`examsession.OpenJournal` adds a local disk journal around the same owner-bound
+lease lifecycle, without changing the development API or deploying a runner.
+The caller supplies an operator-created, private `0700` directory owned by the
+process and an explicit capacity; the intended `evilsysadmin` staging pilot uses
+capacity **one**. A username is not an owner identity or an authorization grant.
+The controller must separately verify the UUID subject and live Identity session.
+
+Each reservation is written to a private `0600` temporary file, flushed, atomically
+renamed and followed by a directory flush **before Start returns a lease**. An
+exclusive process lock prevents multiple controllers using the same directory.
+Any write failure disables the journal instance, including reads that could
+authorize further execution; a repaired filesystem alone does not resume it.
+
+On reopening, every previous lease becomes **closed, pending cleanup**, including
+unexpired ones. Its owner and capacity slot remain reserved until a trusted
+controller independently verifies Kubernetes resource deletion and persists
+`ConfirmCleanup`. The journal performs no Kubernetes deletion itself. Repeating
+cleanup after a failed acknowledgement is required and safe; it must never be
+treated as proof that a namespace has already disappeared.
+
+Missing state beside an existing lock, invalid/oversized JSON, duplicate keys,
+invalid/duplicate owners, IDs or namespaces, inconsistent deadlines, unsafe file
+permissions, links or an incompatible capacity all stop recovery. Do not delete
+the journal or lock to unblock provisioning: reconcile orphan namespaces and
+credentials first. Use a local Linux filesystem with flock, atomic rename and
+fsync, not NFS; controller state must live outside the checkout and be backed up
+and restored together with reconciliation of the runner.
+
+Race-enabled behavior tests include concurrent starts, process lock exclusion,
+abrupt subprocess exit without Close, restart recovery, TTL, corrupt state,
+storage failure and failed cleanup acknowledgement. They establish durable
+reservation semantics; they do not establish power-loss behavior of a particular
+storage device, Kubernetes isolation or a deployed public lab. Fresh per-operation
+authorization, a runner/reaper, admission/quotas, constrained candidate transport,
+actual kind scenario/isolation acceptance and an Infra handoff remain required.
 
 ## Staged migration contract
 
@@ -233,8 +271,9 @@ if it contains a UUID matching the required input type.
    treat the local-kind role bootstrap as production provisioning.
 4. **Foundation only:** Internal owner-bound Go session leases, independent
    randomly allocated namespaces, TTL and cleanup acknowledgements are
-   covered by race-enabled tests. Next: durable session state, authenticated
-   Identity revocation checks, and trusted Kubernetes cleanup/provisioning.
+   covered by race-enabled tests, with an optional durable Linux journal and
+   restart-to-cleanup recovery. Next: authenticated Identity revocation checks
+   in the runner and trusted Kubernetes cleanup/provisioning.
    Do not treat the in-memory package as a production controller.
 5. Port the operator-only Workers AI scenario factory, quarantine, budget
    and review gates to Go, preserving the no-auto-publication rule.
