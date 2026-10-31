@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './style.css'
 import { AccountAccess } from './AccountAccess'
 import { accountEnabled } from './identitySession'
+import { PilotLabs } from './PilotLabs'
 const centralAccount = accountEnabled(import.meta.env.VITE_SHADOWOPS_IDENTITY, location.origin)
+const labsPilot = centralAccount && import.meta.env.VITE_CKA_LABS_STAGING === 'pilot'
 
 const cases = [
   { slug: 'scale-payment-api', title: 'Caída de capacidad en pagos', domain: 'workloads', minutes: 6,
@@ -22,6 +24,7 @@ const cases = [
 
 function Preview() {
   const [selected, setSelected] = useState(0)
+  const [labAccount, setLabAccount] = useState(false)
   const current = cases[selected]
   return <div className="app">
     <header className="topbar">
@@ -29,7 +32,7 @@ function Preview() {
         <div><div className="brand-heading">CKA <span>// LAB</span></div>
           <div className="brand-subtitle">KUBERNETES · HANDS-ON TRAINING</div></div></div>
       <div className="topbar-end"><span className="environment-dot"/>
-        <span className="environment">PUBLIC PREVIEW · READ ONLY</span><span className="version">ALPHA</span></div>
+        <span className="environment">{labsPilot ? 'STAGING · CKA LABS' : 'PUBLIC PREVIEW · READ ONLY'}</span><span className="version">ALPHA</span></div>
     </header>
     <main className="main">
       <section className="intro"><div><div className="eyebrow">THE PRACTICE GROUND</div>
@@ -38,12 +41,15 @@ function Preview() {
       </div><div className="run-overview"><span>PREVIEW</span><strong>CKA</strong><small>Scenarios</small></div></section>
       <div role="status" style={{ border:'1px solid #397965',background:'#12372d',padding:16,
         borderRadius:10, marginBottom:18, fontSize:13, lineHeight:1.65 }}>
-        <strong>Demostración pública de solo lectura.</strong> Puedes explorar los ejercicios, pero
+        {labsPilot ? <><strong>Práctica en staging.</strong> Inicia sesión para comprobar el acceso a los laboratorios habilitados.</> : <><strong>Demostración pública de solo lectura.</strong> Puedes explorar los ejercicios, pero
         no hay Kubernetes ni consola ejecutable en este dominio. Los laboratorios se habilitarán
-        cuando existan autenticación y aislamiento seguro por sesión.
+        cuando existan autenticación y aislamiento seguro por sesión.</>}
       </div>
-      {centralAccount && <AccountAccess/>}
-      <div className="workspace">
+      {centralAccount && <AccountAccess labsPilot={labsPilot} onStateChange={value => {
+        if (value.phase === 'authenticated') setLabAccount(true)
+        else if (value.phase !== 'checking') setLabAccount(false)
+      }}/>}
+      {labsPilot && labAccount ? <PilotLabs/> : <div className="workspace">
         <aside className="sidebar">
           <div className="section-heading"><span>SCENARIO BANK</span><span className="count">{String(cases.length).padStart(2,'0')}</span></div>
           {cases.map((s,i)=><button key={s.slug} type="button" aria-pressed={selected===i}
@@ -74,9 +80,10 @@ function Preview() {
             <div className="action-buttons"><button className="button ghost" disabled>Check solution</button>
               <button className="button primary" disabled>Prepare lab</button></div></div>
         </section>
-      </div>
-      <footer className="footer">CKA // LAB · SHADOWOPS · STATIC PREVIEW · NO CLUSTER ACCESS</footer>
+      </div>}
+      <footer className="footer">CKA // LAB · SHADOWOPS · {labsPilot ? 'STAGING' : 'STATIC PREVIEW · NO CLUSTER ACCESS'}</footer>
     </main>
   </div>
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Preview/></React.StrictMode>)
+
