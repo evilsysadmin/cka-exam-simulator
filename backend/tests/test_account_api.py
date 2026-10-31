@@ -36,8 +36,9 @@ def test_account_checks_live_authority_every_time_and_never_grants_a_lab(materia
     calls = []
     def authority(request):
         calls.append(request)
-        assert str(request.url) == STAGING_ISSUER + "/api/identity/freshness"
+        assert str(request.url) == STAGING_ISSUER + ":9443/api/identity/freshness"
         assert request.method == "POST"
+        assert request.headers["host"] == "id-staging.shadowops.dpdns.org"
         assert request.headers["Authorization"] == "Bearer " + SOC
         assert "origin" not in request.headers and "cookie" not in request.headers
         assert json.loads(request.content) == {"subject": SUBJECT, "session_version": 3, "token_jti": JTI}

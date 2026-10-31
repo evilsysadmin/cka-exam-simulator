@@ -1,7 +1,7 @@
 name: CKA account staging
 on:
   pull_request:
-    paths: ['backend/cka_sim/account_api.py', 'backend/cka_sim/identity*.py', 'backend/tests/test_account_api.py', 'deploy/**', '.github/workflows/account-staging.yml']
+    paths: ['backend/cka_sim/account_api.py', 'backend/cka_sim/identity*.py', 'backend/tests/test_account_api.py', 'backend/tests/test_account_private_tls.py', 'deploy/**', '.github/workflows/account-staging.yml']
   push:
     branches: [main]
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
       - name: Verify signature, live freshness, CORS and lab separation
         env:
           PYTHONPATH: backend
-        run: python -m pytest backend/tests/test_account_api.py backend/tests/test_identity_freshness.py
+        run: python -m pytest backend/tests/test_account_api.py backend/tests/test_account_private_tls.py backend/tests/test_identity_freshness.py
       - name: Audit pinned account runtime dependencies
         run: |
           python -m pip install pip-audit

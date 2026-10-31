@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 from .identity_freshness import verify_current_staging_cka_session
 from .identity_poc import CKA_AUDIENCE, STAGING_ISSUER, IdentityPoCError, _json_object, _keys
-from .identity_transport import IdentityFreshnessClient
+from .identity_transport import IdentityFreshnessClient, private_identity_tls
 
 ORIGIN = "https://staging.cka.shadowops.dpdns.org"
 HOST = "cka-api-staging.shadowops.dpdns.org"
@@ -48,11 +48,11 @@ class _FreshnessBudget:
 
 
 def create_account_app(*, jwks: bytes, credential: str, build: str,
-                       transport=None) -> FastAPI:
+                       transport=None, tls_context=None) -> FastAPI:
     _keys(jwks)
     if not re.fullmatch("[a-f0-9]{40}", build):
         raise ValueError("Immutable account source required")
-    freshness = _FreshnessBudget(IdentityFreshnessClient(credential, transport=transport))
+    freshness = _FreshnessBudget(IdentityFreshnessClient(credential, transport=transport, tls_context=tls_context))
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
@@ -115,11 +115,12 @@ def configured_app() -> FastAPI:
         if CONFIG.is_symlink() or not CONFIG.is_file() or CONFIG.stat().st_size > 24576:
             raise ValueError()
         config = _json_object(CONFIG.read_bytes())
-        if (set(config) != {"environment", "jwks", "service_credential", "build"}
+        if (set(config) != {"environment", "jwks", "identity_ca_pem", "service_credential", "build"}
                 or config["environment"] != "staging"
                 or config["build"] != os.environ.get("CKA_ACCOUNT_BUILD_SHA")):
             raise ValueError()
         return create_account_app(jwks=json.dumps(config["jwks"]).encode(),
-                                  credential=config["service_credential"], build=config["build"])
+                                  credential=config["service_credential"], build=config["build"],
+                                  tls_context=private_identity_tls(config["identity_ca_pem"]))
     except Exception:
         raise RuntimeError("Invalid private CKA staging account configuration") from None
