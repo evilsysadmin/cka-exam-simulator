@@ -213,8 +213,11 @@ jobs:
           go mod download
           go mod verify
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cka-observe" ./cmd/cka-observe
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cka-lease-stdio" ./cmd/cka-lease-stdio
           cd ..
           python scripts/check_go_live_observer.py "$RUNNER_TEMP/cka-observe"
+      - name: Prove journal leases, candidate RBAC, restricted admission and verified cleanup
+        run: python scripts/check_leased_live_cluster.py "$RUNNER_TEMP/cka-lease-stdio"
       - name: Print cluster diagnostics if smoke fails
         if: failure()
         run: |
