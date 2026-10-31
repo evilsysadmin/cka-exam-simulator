@@ -141,7 +141,9 @@ class LabController:
     def reap(self):
         """Private lifespan worker only. Restart/expiry never bypass deletion."""
         if not self.lock.acquire(blocking=False):
-            return False
+            # A candidate operation legitimately holds this lock while provisioning,
+            # grading or cleaning up. No health check ran: keep the last verdict.
+            return None
         try:
             if not self.cluster.ready():
                 return False
