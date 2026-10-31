@@ -322,3 +322,23 @@ that runtime, create Kubernetes namespaces, expose a terminal or grant lab
 access. Namespace preparation, candidate RBAC/admission/network policy,
 verified deletion, per-operation Identity authorization and browser acceptance
 remain separate controller responsibilities.
+
+## Candidate terminal grammar for the restricted staging pilot
+
+`cka_sim.candidate_kubectl.plan_candidate_command` accepts the diagnostic
+commands and the three curated repair operations, then returns normalized
+arguments with the exact random lease namespace. It never invokes a shell,
+spawns kubectl, reads credentials, verifies Identity or grants Kubernetes access.
+
+Mutations are restricted to the leased Deployment/Service: bounded scaling,
+web-container CPU resources, Deployment replica patches and Service app-selector
+patches. Reject global/foreign namespaces, credential/context/server/proxy/file
+options, arbitrary workloads, exec/run/apply, shell syntax, duplicate patch keys,
+JSON type confusion and attempts to change images, pod privileges or Service
+exposure. Diagnostic resource/output/selector choices are explicit.
+
+The future staging controller must first verify fresh Identity and an active
+owner-bound lease, use only candidate-scoped credentials, enforce output/deadline
+budgets and retain Kubernetes RBAC/admission plus runtime/network isolation.
+The existing loopback developer terminal and public account-only API remain
+unchanged; this argument planner is not a public terminal endpoint.
