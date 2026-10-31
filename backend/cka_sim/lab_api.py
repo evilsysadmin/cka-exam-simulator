@@ -61,7 +61,11 @@ def create_lab_app(*, controller, build, close=None):
 
         def reconcile():
             while not stopped.wait(3):
-                app.state.ready = controller.reap()
+                verdict = controller.reap()
+                # None means another authorized operation holds the actor lock;
+                # it is not evidence that the cluster or cleanup has failed.
+                if verdict is not None:
+                    app.state.ready = verdict is True
         worker = threading.Thread(target=reconcile, name="cka-lab-reaper", daemon=True)
         worker.start()
         try:

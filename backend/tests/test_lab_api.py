@@ -239,3 +239,44 @@ def test_unready_cluster_denies_all_lab_operations_before_identity_or_lease(mate
     api.app.state.ready = True
     assert post(api, headers, "capabilities").status_code == 200
     assert state["calls"] == 1
+
+def test_busy_candidate_operation_does_not_mark_rootless_cluster_unhealthy(material):
+    api, headers, controller, journal, cluster, state = setup(material)
+    controller.lock.acquire()
+    try:
+        # The reaper did not inspect the cluster; this is not a failure.
+        assert controller.reap() is None
+        assert cluster.calls == [] and journal.lease is None
+    finally:
+        controller.lock.release()
+    assert controller.reap() is True
+
+
+def test_lifespan_readiness_survives_reaper_skipped_by_active_operation():
+    import threading
+    import time
+
+    class BusyReaper:
+        def __init__(self):
+            self.calls = 0
+            self.skipped = threading.Event()
+
+        def reap(self):
+            self.calls += 1
+            if self.calls == 1:
+                return True
+            self.skipped.set()
+            return None
+
+    reaper = BusyReaper()
+    app = create_lab_app(controller=reaper, build="a" * 40)
+    with TestClient(app, base_url="https://" + HOST) as api:
+        assert api.get("/readyz").status_code == 200
+        # Exercise the actual lifespan worker (3-second cadence), not a mocked
+        # helper. The skipped reaper must leave readiness unchanged.
+        assert reaper.skipped.wait(timeout=7)
+        time.sleep(0.1)
+        assert api.get("/readyz").status_code == 200
+        assert app.state.ready is True
+
+
