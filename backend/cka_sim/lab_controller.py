@@ -46,6 +46,9 @@ class LabController:
         self.authenticate, self.pilot_subject = authenticate, pilot_subject
         self.parse_scenario = parse_scenario
         self.lock = threading.Lock()
+        # Recovery pointer only. Go still checks the owner/phase on every read;
+        # a controller restart closes/reaps its durable leases before reuse.
+        self.current = None
 
     def _owner(self, token):
         try:
@@ -74,8 +77,16 @@ class LabController:
         try:
             owner = self._owner(token)
             if action == "capabilities":
+                current = None
+                if self.current and self.current[0] == owner:
+                    _, identity, scenario = self.current
+                    try:
+                        view = self.leases.status(owner, identity)
+                        current = {"session": view, "scenario": scenario.candidate_view()}
+                    except LeaseRejected:
+                        self.current = None
                 return {"labs_enabled": True, "capacity": 1,
-                        "scenarios": [s.candidate_view() for s in self.bank.values()]}
+                        "scenarios": [s.candidate_view() for s in self.bank.values()], "current": current}
             if action == "prepare":
                 if type(slug) is not str or slug not in self.bank:
                     raise LabDenied("Scenario unavailable")
@@ -85,6 +96,7 @@ class LabController:
                     scenario = self.parse_scenario(lease["Scenario"])
                     if scenario.slug != slug or scenario.namespace != lease["Namespace"]:
                         raise ValueError()
+                    self.current = (owner, identity, scenario)
                     self.cluster.provision(identity, scenario)
                     view, _ = self._active(owner, identity)
                     return {"session": view, "scenario": scenario.candidate_view()}
@@ -123,6 +135,8 @@ class LabController:
         # and independently verifies absence. Never confirm from an HTTP request.
         self.cluster.cleanup(cleanup["ID"], cleanup["Namespace"])
         self.leases.confirm_cleanup(cleanup["ID"], cleanup["Namespace"])
+        if self.current and self.current[1] == cleanup["ID"]:
+            self.current = None
 
     def reap(self):
         """Private lifespan worker only. Restart/expiry never bypass deletion."""

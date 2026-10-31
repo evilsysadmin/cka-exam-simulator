@@ -204,3 +204,16 @@ def test_config_requires_verified_uuid_instead_of_username(material):
     with pytest.raises(ValueError):
         LabController(leases=Journal(), cluster=Cluster(), bank=load_bank(),
                       authenticate=lambda _: SUBJECT, pilot_subject="evilsysadmin")
+
+
+def test_owner_recovers_an_attempt_after_reload_or_a_lost_prepare_response(material):
+    api, headers, controller, journal, cluster, state = setup(material)
+    assert post(api, headers, "capabilities").json()["current"] is None
+    prepared = post(api, headers, "prepare", slug="scale-payment-api").json()
+    current = post(api, headers, "capabilities").json()["current"]
+    assert current == prepared
+    state["revoked"] = True
+    assert post(api, headers, "capabilities").status_code == 401
+    state["revoked"] = False
+    assert post(api, headers, "finish", id=current["session"]["id"]).status_code == 200
+    assert post(api, headers, "capabilities").json()["current"] is None
