@@ -1,0 +1,78 @@
+name: CKA restricted lab staging
+on:
+  pull_request:
+    paths: ['backend/cka_sim/lab*.py','backend/cka_sim/leased_kube.py','backend/cka_sim/lease_process.py','backend/cka_sim/candidate_kubectl.py','backend/cka_sim/identity*.py','backend/tests/test_lab_api.py','deploy/**','go/**','.github/workflows/lab-staging.yml']
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lab:
+    name: Fresh Identity lab boundary and immutable image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r deploy/lab-requirements.txt pytest
+      - name: Verify signature, live revocation, ownership, TTL and cleanup boundaries
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest backend/tests/test_lab_api.py backend/tests/test_candidate_kubectl.py backend/tests/test_leased_kube.py
+      - name: Audit pinned lab runtime dependencies
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit --strict -r deploy/lab-requirements.txt
+      - name: Build the independent lab image
+        run: docker build -f deploy/Dockerfile.lab --build-arg SOURCE_SHA="$GITHUB_SHA" -t cka-lab-ci .
+      - name: Prove developer and inference modules are absent
+        run: |
+          docker run --rm --read-only --network none --entrypoint python cka-lab-ci -c "import importlib.util; from cka_sim.lab_api import create_lab_app; from cka_sim.catalog import load_bank; assert len(load_bank())==3; assert all(importlib.util.find_spec('cka_sim.'+n) is None for n in ['api','kube','factory','session','providers','__main__']); print('CKA_LAB_IMAGE_ISOLATION_OK')"
+          docker run --rm --read-only --network none --entrypoint kubectl cka-lab-ci version --client
+  publish:
+    name: Publish signed lab image for Infra handoff
+    needs: lab
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'evilsysadmin/cka-exam-simulator'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Require current source main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api repos/evilsysadmin/cka-exam-simulator/commits/main --jq .sha)" = "$GITHUB_SHA"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        id: image
+        with:
+          context: .
+          file: deploy/Dockerfile.lab
+          platforms: linux/arm64,linux/amd64
+          push: true
+          tags: ghcr.io/evilsysadmin/cka-lab-staging:sha-${{ github.sha }}
+          build-args: SOURCE_SHA=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/evilsysadmin/cka-lab-staging
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
