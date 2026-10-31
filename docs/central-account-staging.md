@@ -13,7 +13,7 @@ is unchanged. No application merge publishes or enables this service.
 
 The operator supplies the fixed read-only `/run/secrets/cka-account-staging.json`
 with exactly `environment=staging`, independently provisioned public `jwks`,
-the CKA-only `service_credential` and a 40-character `build` matching the image's
+the public `identity_ca_pem`, CKA-only `service_credential` and a 40-character `build` matching the image's
 source SHA. Never reuse the Chronicles SOC, mount the whole Identity bundle,
 accept a key URL from a token, or put any service proof into a browser build.
 
@@ -55,3 +55,14 @@ returns 204. A failed logout remains visible and can be retried. The browser
 smoke uses actual built React UI with explicitly synthetic service responses
 at desktop and mobile sizes; live cross-product SSO requires separate public
 acceptance after Infra deployment.
+
+## Private authority connection
+
+The account container joins only its own internal origin network and Identity's
+internal origin network. It has no general egress/default route, so the account
+process cannot reach cloud instance metadata. Identity's origin network provides
+the fixed alias `id-staging.shadowops.dpdns.org`. Freshness uses that name at
+TLS port 9443 with the exact Host header, certificate hostname verification and
+only the supplied public staging CA. The browser still uses public HTTPS 443.
+The account bundle includes no CA private key. A wrong/missing CA or hostname
+fails closed; neither proxy environment nor redirects can choose another target.
