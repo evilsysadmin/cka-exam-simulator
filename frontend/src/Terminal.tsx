@@ -37,7 +37,36 @@ export default function TerminalPanel({ onCommand, scenario, staging = false }: 
     let input = ''
     let busy = false
     let disposed = false
-    const prompt = () => terminal.write('\r\n\x1b[32mcka@lab\x1b[0m:\x1b[34m~\x1b[0m$ ')
+    let escape = ''
+    const history: string[] = []
+    let historyIndex = -1
+    let draft = ''
+    const promptText = '\x1b[32mcka@lab\x1b[0m:\x1b[34m~\x1b[0m$ '
+    const prompt = () => terminal.write('\r\n' + promptText)
+    // Repaint only the pending command, including its wrapped physical rows.
+    // Do not clear the xterm buffer: previous output is valuable during an exam.
+    const replaceInput = (next: string) => {
+      const rows = Math.floor((11 + input.length - 1) / Math.max(1, terminal.cols))
+      let erase = '\r\x1b[2K'
+      for (let row = 0; row < rows; row++) erase += '\x1b[1A\r\x1b[2K'
+      terminal.write(erase + '\x1b[0J' + promptText + next)
+      input = next
+    }
+    const navigate = (direction: -1 | 1) => {
+      if (!history.length) return
+      if (direction === -1) {
+        if (historyIndex === -1) { draft = input; historyIndex = history.length }
+        historyIndex = Math.max(0, historyIndex - 1)
+        replaceInput(history[historyIndex])
+      } else if (historyIndex !== -1) {
+        historyIndex++
+        if (historyIndex === history.length) {
+          historyIndex = -1
+          replaceInput(draft)
+          draft = ''
+        } else replaceInput(history[historyIndex])
+      }
+    }
     terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  ' + (staging ? 'STAGING' : 'LOCAL PREVIEW'))
     terminal.writeln('Scenario: ' + scenario)
     terminal.writeln('Allowed: kubectl get / describe / scale / patch / rollout / explain / set resources')
@@ -60,19 +89,45 @@ export default function TerminalPanel({ onCommand, scenario, staging = false }: 
     const subscription = terminal.onData((chunk) => {
       if (busy) return
       for (const key of chunk) {
+        // xterm sends cursor keys as escape sequences, sometimes split across
+        // chunks. Unknown sequences must never leak "[A" into kubectl input.
+        if (escape) {
+          escape += key
+          if (escape === '\x1b[' || escape === '\x1bO' ||
+              (/^\x1b\[[0-9;]*$/.test(escape) && escape.length < 16)) continue
+          if (escape === '\x1b[A' || escape === '\x1bOA') navigate(-1)
+          if (escape === '\x1b[B' || escape === '\x1bOB') navigate(1)
+          escape = ''
+          continue
+        }
+        if (key === '\x1b') { escape = key; continue }
+        if (key === '\u0003') {
+          // Ctrl+C cancels unsubmitted text, never an in-flight lab command.
+          terminal.write('^C')
+          input = ''; historyIndex = -1; draft = ''
+          prompt()
+          continue
+        }
         if (key === '\r') {
           const line = input.trim()
-          input = ''
-          if (line) { void handle(line) }
-          else prompt()
+          input = ''; historyIndex = -1; draft = ''
+          if (line) {
+            if (history.at(-1) !== line) history.push(line)
+            if (history.length > 40) history.shift()
+            void handle(line)
+          } else prompt()
           break
         }
         if (key === '\u007f') {
-          if (input.length) { input = input.slice(0, -1); terminal.write('\b \b') }
+          if (input.length) {
+            if (historyIndex !== -1) { historyIndex = -1; draft = '' }
+            replaceInput(input.slice(0, -1))
+          }
           continue
         }
-        if (key >= ' ' && key !== '\u007f' && key !== '\x1b') {
+        if (key >= ' ' && key !== '\u007f') {
           if (input.length >= 600) continue
+          if (historyIndex !== -1) { historyIndex = -1; draft = '' }
           input += key
           terminal.write(key)
         }

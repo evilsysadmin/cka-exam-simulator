@@ -23,7 +23,7 @@ let last
 try{
   for(const [name,width,height,mobile] of [['desktop',1440,1000,false],['mobile',390,844,true]]){
     const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile})
-    let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0,capabilityFailure=null
+    let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0,readCalls=0,capabilityFailure=null
     await context.route('**/*',async route=>{
       const req=route.request(),url=new URL(req.url())
       if(url.origin===GAME){
@@ -61,7 +61,10 @@ try{
           repaired=false;result=current
         }else{
           assert.equal(data.id,current.session.id)
-          if(action==='command'){assert.equal(data.command,commands[scenarios.findIndex(s=>s.slug===current.scenario.slug)]);commandCalls++;repaired=true;result={output:'workload actualizado'}}
+          if(action==='command'){
+            if(data.command==='kubectl get pods'){readCalls++;result={output:'pod/ready'}}
+            else {assert.equal(data.command,commands[scenarios.findIndex(s=>s.slug===current.scenario.slug)]);commandCalls++;repaired=true;result={output:'workload actualizado'}}
+          }
           else if(action==='grade')result={passed:repaired,score:repaired?100:0,checks:[{name:'Estado real del ejercicio',passed:repaired}]}
           else if(action==='finish'){current=null;result={status:'closed'}}
           else throw Error('unexpected action '+action)
@@ -107,6 +110,27 @@ try{
       const input=page.locator('.xterm-helper-textarea');await input.focus()
       await page.keyboard.type(commands[index]);await page.keyboard.press('Enter')
       await page.getByRole('status').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
+      if(index===0){
+        // Real xterm keyboard handling: history must recall the submitted
+        // kubectl command without writing literal arrow escape fragments.
+        const repeated=page.waitForRequest(request=>request.url()===LABS+'/api/labs/command' &&
+          request.postDataJSON()?.command===commands[0])
+        await page.keyboard.press('ArrowUp')
+        await page.keyboard.press('Enter')
+        await repeated
+        await page.getByRole('status').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
+        assert.equal(commandCalls,2,'Up + Enter should repeat the actual command once')
+        // Walking up and then down must restore a partially typed draft.
+        const draftRequest=page.waitForRequest(request=>request.url()===LABS+'/api/labs/command' &&
+          request.postDataJSON()?.command==='kubectl get pods')
+        await page.keyboard.type('kubectl get pods')
+        await page.keyboard.press('ArrowUp')
+        await page.keyboard.press('ArrowDown')
+        await page.keyboard.press('Enter')
+        await draftRequest
+        await page.getByRole('status').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
+        assert.equal(readCalls,1,'Down should restore the unfinished draft')
+      }
       await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click()
       await page.getByText(/Ejercicio resuelto/).waitFor()
       const layout=await page.locator('.lab').evaluate(lab=>{
@@ -125,7 +149,8 @@ try{
       await page.getByRole('button',{name:'Finalizar intento',exact:true}).click()
       await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).waitFor()
     }
-    assert.equal(commandCalls,3)
+    assert.equal(commandCalls,4)
+    assert.equal(readCalls,1)
     await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click()
     await page.getByRole('link',{name:'Continuar con ShadowOps',exact:true}).waitFor()
     assert.equal(await page.getByRole('region',{name:'Laboratorios CKA'}).count(),0)
