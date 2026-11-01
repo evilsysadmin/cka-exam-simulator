@@ -17,16 +17,19 @@ const commands=[
   `kubectl patch service/catalog-api-svc --type=merge -p '{"spec":{"selector":{"app":"catalog"}}}'`,
   'kubectl set resources deployment/scheduler-api --requests=cpu=10m --limits=cpu=250m',
 ]
+const builtRelease=JSON.parse(await readFile(path.join(root,'dist-lab-staging/release.json'),'utf8'))
 const output=path.join(root,'lab-captures');await mkdir(output,{recursive:true})
 const browser=await chromium.launch({headless:true,...(process.env.CKA_CHROMIUM_EXECUTABLE?{executablePath:process.env.CKA_CHROMIUM_EXECUTABLE}:{})})
 let last
 try{
   for(const [name,width,height,mobile] of [['desktop',1440,1000,false],['mobile',390,844,true]]){
     const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile})
+    let publishedBuild=builtRelease.build
     let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0,readCalls=0,capabilityFailure=null,otherUserBusy=true
     await context.route('**/*',async route=>{
       const req=route.request(),url=new URL(req.url())
       if(url.origin===GAME){
+        if(url.pathname==='/release.json')return route.fulfill({status:200,json:{...builtRelease,build:publishedBuild}})
         const base=path.join(root,'dist-lab-staging'),name=decodeURIComponent(url.pathname)
         const file=path.resolve(base,name==='/'?'index.html':'.'+name)
         assert.ok(file.startsWith(base+'/'))
@@ -90,6 +93,45 @@ try{
       if(index===0){
         const terminal=await page.locator('.terminal-screen').elementHandle()
         assert.ok(terminal)
+        const finishButton=page.getByRole('button',{name:'Finalizar intento',exact:true})
+        assert.equal(await finishButton.evaluate(button=>button.tabIndex),-1)
+        await finishButton.click()
+        await page.getByRole('dialog').waitFor()
+        assert.equal(await page.getByRole('button',{name:'Cancelar',exact:true}).evaluate(button=>button===document.activeElement),true)
+        await page.keyboard.press('Enter')
+        await page.getByRole('dialog').waitFor({state:'detached'})
+        assert.ok(current,'Enter on default Cancel must keep the lease')
+        await finishButton.click();await page.keyboard.press('Escape')
+        await page.getByRole('dialog').waitFor({state:'detached'})
+        assert.ok(current,'Escape must keep the lease')
+        // Maximize/restore must preserve the actual xterm and its scrollback.
+        await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
+        assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true)
+        const height=await page.locator('.console-area').evaluate(element=>element.getBoundingClientRect().height)
+        assert.ok(height>500,'Maximized terminal should use the viewport')
+        const objective=page.getByRole('button',{name:'Objetivo',exact:true})
+        if(mobile)await objective.click();else await objective.hover()
+        await page.getByRole('complementary',{name:'Objetivo del laboratorio'}).waitFor()
+        await page.screenshot({path:path.join(output,name+'-terminal-maximized.png'),fullPage:true})
+        await page.getByRole('button',{name:'Restaurar terminal',exact:true}).click()
+        assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true)
+        if(/^[a-f0-9]{40}$/.test(builtRelease.build)){
+          publishedBuild='not-a-release'
+          const invalidCheck=page.waitForResponse(response=>response.url().startsWith(GAME+'/release.json?'))
+          const invalidCapabilities=page.waitForResponse(response=>response.url()===LABS+'/api/labs/capabilities')
+          await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+          await Promise.all([(await invalidCheck).finished(),(await invalidCapabilities).finished()])
+          await page.evaluate(()=>new Promise(requestAnimationFrame))
+          assert.equal(await page.getByText('Nueva versión disponible',{exact:true}).count(),0)
+          publishedBuild=builtRelease.build==='d'.repeat(40)?'e'.repeat(40):'d'.repeat(40)
+          const newCheck=page.waitForResponse(response=>response.url().startsWith(GAME+'/release.json?'))
+          const newCapabilities=page.waitForResponse(response=>response.url()===LABS+'/api/labs/capabilities')
+          await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+          await Promise.all([(await newCheck).finished(),(await newCapabilities).finished()])
+          await page.evaluate(()=>new Promise(requestAnimationFrame))
+          await page.getByText('Nueva versión disponible',{exact:true}).waitFor()
+          assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true,'Update check must not reload a live lab')
+        }
         // A transient failed background check must preserve the actual xterm
         // node (and thus scrollback/input), even while a real lease is active.
         for(const status of [503,409,429]){
@@ -154,6 +196,7 @@ try{
       assert.equal(await page.evaluate(()=>localStorage.length+sessionStorage.length),0)
       await page.screenshot({path:path.join(output,name+'-'+scenarios[index].slug+'.png'),fullPage:true})
       await page.getByRole('button',{name:'Finalizar intento',exact:true}).click()
+      await page.getByRole('button',{name:'Sí, finalizar intento',exact:true}).click()
       await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).waitFor()
     }
     assert.equal(commandCalls,4)

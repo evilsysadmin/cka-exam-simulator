@@ -137,6 +137,8 @@ jobs:
         working-directory: frontend
       - run: npm run build:lab-staging
         working-directory: frontend
+        env:
+          VITE_BUILD_SHA: ${{ github.sha }}
       - name: Install pinned account browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium

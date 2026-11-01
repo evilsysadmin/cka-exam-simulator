@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import TerminalPanel from './Terminal'
 import { LabRequestError, LabSession } from './labSession'
+import { ConfirmFinish } from './ConfirmFinish'
 
 type Scenario = { slug: string; title: string; story: string; domain: string; difficulty: string;
   minutes: number; statement: string; namespace: string }
@@ -22,7 +23,7 @@ function validAttempt(value: Attempt | null) {
     value.session.remaining_seconds >= 0 && value.session.remaining_seconds <= 1200)
 }
 
-export function PilotLabs() {
+export function PilotLabs({ onEditingChange }: { onEditingChange?: (value: boolean) => void } = {}) {
   const transport = useRef<LabSession | null>(null)
   const busyRef = useRef(false)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
@@ -33,6 +34,16 @@ export function PilotLabs() {
   const [deadline, setDeadline] = useState<number | null>(null)
   const [remaining, setRemaining] = useState(0)
   const [grade, setGrade] = useState<Grade | null>(null)
+  const [confirmFinish, setConfirmFinish] = useState(false)
+  const [maximized, setMaximized] = useState(false)
+  const [objectiveOpen, setObjectiveOpen] = useState(false)
+  useEffect(() => { onEditingChange?.(busy === 'Editando con nano…'); return () => onEditingChange?.(false) }, [busy, onEditingChange])
+  useEffect(() => {
+    if (!maximized) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [maximized])
 
   function restore(value: Attempt | null) {
     if (!validAttempt(value)) throw Error('Respuesta de sesión no válida')
@@ -107,7 +118,7 @@ export function PilotLabs() {
     await perform('Limpiando el intento…', async () => {
       const result = await transport.current!.request<{status: string}>('finish', { id: attempt.session.id })
       if (result.status !== 'closed') throw Error('Limpieza aún no confirmada')
-      restore(null); setGrade(null)
+      restore(null); setGrade(null); setMaximized(false); setObjectiveOpen(false)
       // Verified cleanup releases our slot. A concurrent claim is still
       // serialized by the server and reported by the next capabilities poll.
       setCapabilities(previous => previous ? { ...previous, current: null, available: true } : previous)
@@ -146,7 +157,7 @@ export function PilotLabs() {
       <div className="sidebar-footer"><span className="green-dot" /> UNA PLAZA COMPARTIDA
         <p>Una persona puede practicar cada vez. Termina tu intento para liberar la plaza; también se limpia al agotarse el tiempo.</p></div>
     </aside>
-    <div className="lab"><div className="lab-header"><div className="lab-title">
+    <div className={'lab' + (maximized ? ' terminal-maximized' : '')}><div className="lab-header"><div className="lab-title">
       <span className="lab-kicker">TU MISIÓN / {current.domain.toUpperCase()}</span><h2>{current.title}</h2>
       <div className="tags"><span>{current.difficulty}</span><span>{current.namespace}</span></div>
     </div><div className={'clock ' + (attempt && remaining < 60 ? 'urgent' : '')}>
@@ -155,7 +166,18 @@ export function PilotLabs() {
       <div className="mission"><div className="mission-icon">!</div><div><strong>OBJETIVO</strong>
         <p>{current.story}</p><p className="goal">{current.statement}</p></div></div>
       <div className="console-header"><div><span className="console-dot"/><span className="console-dot"/><span className="console-dot"/>
-        <span className="console-label"> TERMINAL / {attempt ? current.namespace : 'en espera'}</span></div></div>
+        <span className="console-label"> TERMINAL / {attempt ? current.namespace : 'en espera'}</span></div>
+        <button type="button" className="terminal-size" aria-pressed={maximized} onClick={() => { setMaximized(value => !value); setObjectiveOpen(false) }}>
+          {maximized ? 'Restaurar terminal' : 'Maximizar terminal'}</button></div>
+      {maximized && <div className="objective-peek" onMouseEnter={() => setObjectiveOpen(true)} onMouseLeave={() => setObjectiveOpen(false)}
+        onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setObjectiveOpen(false) } }}>
+        <button type="button" className="objective-tab" aria-expanded={objectiveOpen} aria-controls="terminal-objective"
+          onFocus={() => setObjectiveOpen(true)} onClick={() => setObjectiveOpen(true)}>Objetivo</button>
+        {objectiveOpen && <aside id="terminal-objective" className="objective-card" aria-label="Objetivo del laboratorio">
+          <strong>{current.title}</strong><p>{current.story}</p><p>{current.statement}</p>
+          <button type="button" className="terminal-size" onClick={() => setObjectiveOpen(false)}>Cerrar objetivo</button>
+        </aside>}
+      </div>}
       <div className="console-area">{active ? <TerminalPanel key={attempt!.session.id} staging scenario={current.slug} onCommand={command}/>
         : <div className="console-empty"><span className="console-placeholder">&gt;_</span>
           <strong>{attempt ? 'El intento está terminando' : occupied ? 'El laboratorio está ocupado' : 'Prepara el ejercicio para empezar'}</strong>
@@ -163,11 +185,12 @@ export function PilotLabs() {
             ? 'Otra persona está practicando. Comprobaremos automáticamente cuándo queda libre.' : 'Trabajarás con recursos reales de Kubernetes.'}</small></div>}</div>
       <div className="action-bar"><div className="action-left" role="status">{busy || (active ? 'LABORATORIO ACTIVO' : 'EN ESPERA')}</div>
         <div className="action-buttons"><button className="button ghost" disabled={!active || Boolean(busy)} onClick={() => void checkGrade()}>Comprobar resultado</button>
-          {attempt ? <button className="button primary" disabled={Boolean(busy)} onClick={() => void finish()}>Finalizar intento</button>
+          {attempt ? <button className="button primary" type="button" tabIndex={-1} disabled={Boolean(busy)} onClick={() => setConfirmFinish(true)}>Finalizar intento</button>
             : <button className="button primary" disabled={Boolean(busy) || occupied} onClick={() => void prepare()}>Preparar laboratorio</button>}</div></div>
       {grade && <div className={'grade ' + (grade.passed ? 'passed' : 'failed')} role="status">
         <strong>{grade.passed ? '✓ Ejercicio resuelto' : 'Todavía no está resuelto'} · {grade.score}/100</strong>
         {grade.checks.map(c => <div key={c.name}>{c.passed ? '✓' : '✕'} {c.name}</div>)}</div>}
+      {confirmFinish && <ConfirmFinish cancel={() => setConfirmFinish(false)} confirm={() => { setConfirmFinish(false); void finish() }}/>}
       {error && <div className="error" role="alert">{error}</div>}
     </div>
   </section>
