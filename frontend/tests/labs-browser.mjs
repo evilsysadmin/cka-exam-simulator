@@ -117,11 +117,15 @@ try{
         assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true)
         if(/^[a-f0-9]{40}$/.test(builtRelease.build)){
           publishedBuild='not-a-release'
+          const invalidCheck=page.waitForResponse(response=>response.url().startsWith(GAME+'/release.json?'))
           await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+          await (await invalidCheck).finished()
+          await page.evaluate(()=>new Promise(requestAnimationFrame))
           assert.equal(await page.getByText('Nueva versión disponible',{exact:true}).count(),0)
           publishedBuild=builtRelease.build==='d'.repeat(40)?'e'.repeat(40):'d'.repeat(40)
-          await page.waitForFunction(()=>!document.querySelector('.action-left')?.textContent?.includes('Comprobando'))
+          const newCheck=page.waitForResponse(response=>response.url().startsWith(GAME+'/release.json?'))
           await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+          await (await newCheck).finished()
           await page.getByText('Nueva versión disponible',{exact:true}).waitFor()
           assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true,'Update check must not reload a live lab')
         }

@@ -8,7 +8,7 @@ export function newerRelease(value: unknown, current: string): string | null {
 }
 export async function checkRelease(fetcher: typeof fetch, current: string, signal: AbortSignal): Promise<string | null> {
   try {
-    const response = await fetcher('/release.json?ts=' + Date.now(), {
+    const response = await fetcher.call(globalThis, '/release.json?ts=' + Date.now(), {
       method: 'GET', cache: 'no-store', credentials: 'omit', redirect: 'error', signal,
       headers: { Accept: 'application/json' },
     })

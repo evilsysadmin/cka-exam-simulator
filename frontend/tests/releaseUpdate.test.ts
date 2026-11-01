@@ -7,7 +7,7 @@ for(const value of [null,{}, {...valid,build:current},{...valid,build:'<script>'
 assert.equal(newerRelease(valid,'development'),null)
 const signal=new AbortController().signal
 let called=false
-const fetcher=(async(url,options)=>{called=true;assert.match(String(url),/^\/release.json\?ts=\d+$/);assert.equal(options?.credentials,'omit');assert.equal(options?.cache,'no-store');assert.equal(options?.redirect,'error');return new Response(JSON.stringify(valid))}) as typeof fetch
+const fetcher=(async function(url,options){assert.equal(this,globalThis);called=true;assert.match(String(url),/^\/release.json\?ts=\d+$/);assert.equal(options?.credentials,'omit');assert.equal(options?.cache,'no-store');assert.equal(options?.redirect,'error');return new Response(JSON.stringify(valid))}) as typeof fetch
 assert.equal(await checkRelease(fetcher,current,signal),latest);assert.ok(called)
 assert.equal(await checkRelease((async()=>{throw Error('offline')}) as typeof fetch,current,signal),null)
 assert.equal(await checkRelease((async()=>new Response('x'.repeat(5000))) as typeof fetch,current,signal),null)
