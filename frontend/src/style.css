@@ -97,3 +97,22 @@ h1 em{color:#77e6b9;font-style:normal}
 .account-copy{min-width:0}.account-copy h2{font-size:23px;margin:8px 0}.account-copy p{color:#b6cdc6;font-size:13px;line-height:1.6;margin:6px 0}.account-copy .account-status{color:#8fe0bb}
 .account-actions{display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0}.account-actions a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;min-height:44px}.account-actions button{min-height:44px}
 @media(max-width:880px){.account-access{align-items:flex-start;flex-direction:column;gap:12px}.account-actions{width:100%}.account-actions>*{flex:1}}
+
+/* Terminal controls retain the same xterm node and scrollback while resizing. */
+.terminal-size{border:1px solid #405f70;border-radius:6px;background:#132530;color:#c6dce5;padding:6px 10px;cursor:pointer;font:600 11px inherit;flex-shrink:0}
+.terminal-size:focus-visible,.objective-tab:focus-visible{outline:2px solid #6ceab3;outline-offset:3px}
+.console-header>div{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.terminal-maximized{position:fixed;inset:10px;z-index:100;display:flex;flex-direction:column;background:#0c1923;border:1px solid #405f70;border-radius:10px;padding:12px;box-shadow:0 0 0 30px #050d14ed}
+.terminal-maximized>.lab-header,.terminal-maximized>.mission,.terminal-maximized>.action-bar,.terminal-maximized>.grade{display:none}
+.terminal-maximized>.console-area{height:auto;min-height:0;flex:1}
+.terminal-maximized>.console-header{flex-shrink:0}
+.objective-peek{position:absolute;right:0;top:30%;z-index:102;display:flex;align-items:flex-start}
+.objective-tab{writing-mode:vertical-rl;transform:rotate(180deg);border:1px solid #4d756e;border-right:0;border-radius:0 5px 5px 0;background:#1b3c38;color:#adf0d3;cursor:pointer;padding:10px 6px;font-size:11px;letter-spacing:1px}
+.objective-card{width:min(370px,calc(100vw - 72px));max-height:65dvh;overflow:auto;background:#152d38;border:1px solid #4d756e;border-radius:8px 0 0 8px;padding:18px;box-shadow:0 12px 35px #0008;order:-1}
+.objective-card strong{font-size:14px;color:#a4e4cd}.objective-card p{font-size:13px;line-height:1.6;color:#c5d9e4}
+.finish-dialog{max-width:440px;width:calc(100vw - 40px);border:1px solid #54706c;border-radius:12px;background:#142834;color:#dceaf0;padding:25px;box-shadow:0 18px 80px #0009}
+.finish-dialog::backdrop{background:#020b12c9}.finish-dialog h2{font-size:21px;margin:0 0 12px}.finish-dialog p{font-size:14px;line-height:1.65;color:#adc5d0}
+.dialog-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:24px}.danger{color:#ffb9ad!important;border-color:#80594f!important}
+.release-update{display:flex;gap:16px;align-items:center;justify-content:space-between;border:1px solid #456f65;border-radius:9px;background:#15372f;padding:14px 18px;margin-bottom:16px;color:#bdebd7}
+.release-update strong,.release-update span{display:block}.release-update span{font-size:12px;margin-top:5px;color:#a9c9bd}.release-update button{flex-shrink:0}
+@media(max-width:500px){.terminal-maximized{inset:4px;padding:6px}.console-header{padding:0 8px}.console-label{margin-left:3px;font-size:9px}.terminal-size{font-size:10px;padding:5px 7px}.release-update{align-items:flex-start;flex-wrap:wrap}.objective-card{padding:13px}}

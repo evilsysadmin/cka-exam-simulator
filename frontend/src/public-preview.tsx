@@ -4,6 +4,7 @@ import './style.css'
 import { AccountAccess } from './AccountAccess'
 import { accountEnabled } from './identitySession'
 import { PilotLabs } from './PilotLabs'
+import { ReleaseUpdate } from './ReleaseUpdate'
 const centralAccount = accountEnabled(import.meta.env.VITE_SHADOWOPS_IDENTITY, location.origin)
 const labsPilot = centralAccount && import.meta.env.VITE_CKA_LABS_STAGING === 'pilot'
 
@@ -25,6 +26,7 @@ const cases = [
 function Preview() {
   const [selected, setSelected] = useState(0)
   const [labAccount, setLabAccount] = useState(false)
+  const [editing, setEditing] = useState(false)
   const current = cases[selected]
   return <div className="app">
     <header className="topbar">
@@ -45,11 +47,12 @@ function Preview() {
         no hay Kubernetes ni consola ejecutable en este dominio. Los laboratorios se habilitarán
         cuando existan autenticación y aislamiento seguro por sesión.</>}
       </div>
+      {centralAccount && <ReleaseUpdate editing={editing}/>}
       {centralAccount && <AccountAccess labsPilot={labsPilot} onStateChange={value => {
         if (value.phase === 'authenticated') setLabAccount(true)
         else if (value.phase !== 'checking') setLabAccount(false)
       }}/>}
-      {labsPilot && labAccount ? <PilotLabs/> : <div className="workspace">
+      {labsPilot && labAccount ? <PilotLabs onEditingChange={setEditing}/> : <div className="workspace">
         <aside className="sidebar">
           <div className="section-heading"><span>SCENARIO BANK</span><span className="count">{String(cases.length).padStart(2,'0')}</span></div>
           {cases.map((s,i)=><button key={s.slug} type="button" aria-pressed={selected===i}
