@@ -26,6 +26,6 @@ export function ReleaseUpdate({ editing = false }: { editing?: boolean }) {
   if (!latest) return null
   return <div className="release-update" role="status">
     <div><strong>Nueva versión disponible</strong><span>{editing ? 'Sal del editor para recargar.' : 'Recarga cuando quieras para usar la actualización.'}</span></div>
-    <button className="button ghost" type="button" disabled={editing} onClick={() => location.reload()}>Recargar</button>
+    <button className="button ghost" type="button" disabled={editing} onClick={() => { if (!editing && !document.querySelector('[data-editor-active="true"]')) location.reload() }}>Recargar</button>
   </div>
 }

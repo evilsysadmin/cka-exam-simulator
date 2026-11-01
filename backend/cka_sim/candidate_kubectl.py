@@ -101,7 +101,9 @@ def plan_candidate_command(command, *, namespace, deployment, service):
         words = shlex.split(command)
     except ValueError:
         _deny()
-    if len(words) < 3 or words[0] != "kubectl":
+    if words in (['k'], ['kubectl']):
+        return ['--help', '--namespace', namespace]
+    if len(words) < 3 or words[0] not in {"kubectl", "k"}:
         _deny()
     selected = False
     rest = []

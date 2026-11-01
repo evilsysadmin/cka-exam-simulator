@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import TerminalPanel from './Terminal'
 import { LabRequestError, LabSession } from './labSession'
 import { ConfirmFinish } from './ConfirmFinish'
+import type { EditorIO } from './editorTransport'
 
 type Scenario = { slug: string; title: string; story: string; domain: string; difficulty: string;
   minutes: number; statement: string; namespace: string }
@@ -142,6 +143,25 @@ export function PilotLabs({ onEditingChange }: { onEditingChange?: (value: boole
     })
   }
 
+  async function edit(command: string, io: EditorIO) {
+    if (!attempt || !active || !transport.current) throw Error('El intento ha terminado.')
+    return perform('Editando con nano…', async () => {
+      const client=transport.current!
+      const opened=await client.request<{editor:string}>('edit-open',{id:attempt.session.id,command})
+      if (!/^[a-f0-9]{32}$/.test(opened.editor)) throw Error('Editor no disponible')
+      try {
+        await client.edit(attempt.session.id,opened.editor,io)
+        const result=await client.request<{output:string}>('edit-save',{id:attempt.session.id,editor:opened.editor})
+        if (typeof result.output!=='string' || result.output.length>1024) throw Error('Resultado de edición no válido')
+        setGrade(null)
+        return result.output
+      } catch (error) {
+        await client.request('edit-cancel',{id:attempt.session.id,editor:opened.editor}).catch(()=>{})
+        throw error
+      }
+    })
+  }
+
   if (!capabilities || !current) return <section className="account-access" aria-label="Laboratorios CKA">
     <div className="account-copy"><h2>Laboratorios de staging</h2><p role="status">{error || 'Comprobando acceso a los laboratorios…'}</p></div>
   </section>
@@ -167,6 +187,8 @@ export function PilotLabs({ onEditingChange }: { onEditingChange?: (value: boole
         <p>{current.story}</p><p className="goal">{current.statement}</p></div></div>
       <div className="console-header"><div><span className="console-dot"/><span className="console-dot"/><span className="console-dot"/>
         <span className="console-label"> TERMINAL / {attempt ? current.namespace : 'en espera'}</span></div>
+        {maximized && attempt && <span className={'terminal-countdown'+(remaining<60?' urgent':'')} role="timer" aria-label="Tiempo restante">
+          {String(Math.floor(remaining/60)).padStart(2,'0')}:{String(remaining%60).padStart(2,'0')}</span>}
         <button type="button" className="terminal-size" aria-pressed={maximized} onClick={() => { setMaximized(value => !value); setObjectiveOpen(false) }}>
           {maximized ? 'Restaurar terminal' : 'Maximizar terminal'}</button></div>
       {maximized && <div className="objective-peek" onMouseEnter={() => setObjectiveOpen(true)} onMouseLeave={() => setObjectiveOpen(false)}
@@ -178,14 +200,14 @@ export function PilotLabs({ onEditingChange }: { onEditingChange?: (value: boole
           <button type="button" className="terminal-size" onClick={() => setObjectiveOpen(false)}>Cerrar objetivo</button>
         </aside>}
       </div>}
-      <div className="console-area">{active ? <TerminalPanel key={attempt!.session.id} staging scenario={current.slug} onCommand={command}/>
+      <div className="console-area">{active ? <TerminalPanel key={attempt!.session.id} staging scenario={current.slug} onCommand={command} onEdit={edit}/>
         : <div className="console-empty"><span className="console-placeholder">&gt;_</span>
           <strong>{attempt ? 'El intento está terminando' : occupied ? 'El laboratorio está ocupado' : 'Prepara el ejercicio para empezar'}</strong>
           <small>{attempt ? 'Puedes finalizarlo y comprobar de nuevo el acceso cuando termine la limpieza.' : occupied
             ? 'Otra persona está practicando. Comprobaremos automáticamente cuándo queda libre.' : 'Trabajarás con recursos reales de Kubernetes.'}</small></div>}</div>
       <div className="action-bar"><div className="action-left" role="status">{busy || (active ? 'LABORATORIO ACTIVO' : 'EN ESPERA')}</div>
         <div className="action-buttons"><button className="button ghost" disabled={!active || Boolean(busy)} onClick={() => void checkGrade()}>Comprobar resultado</button>
-          {attempt ? <button className="button primary" type="button" tabIndex={-1} disabled={Boolean(busy)} onClick={() => setConfirmFinish(true)}>Finalizar intento</button>
+          {attempt ? <button className="button primary" type="button" tabIndex={-1} disabled={Boolean(busy)} onKeyDown={event => { if (event.key==='Enter') { event.preventDefault(); event.stopPropagation() } }} onClick={() => setConfirmFinish(true)}>Finalizar intento</button>
             : <button className="button primary" disabled={Boolean(busy) || occupied} onClick={() => void prepare()}>Preparar laboratorio</button>}</div></div>
       {grade && <div className={'grade ' + (grade.passed ? 'passed' : 'failed')} role="status">
         <strong>{grade.passed ? '✓ Ejercicio resuelto' : 'Todavía no está resuelto'} · {grade.score}/100</strong>

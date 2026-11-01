@@ -1,11 +1,13 @@
 import { CKA_ORIGIN, IDENTITY } from './identitySession.ts'
+import { EditorTransport } from './editorTransport.ts'
+import type { EditorIO } from './editorTransport.ts'
 
 export const LAB_API = 'https://cka-labs-staging.shadowops.dpdns.org'
-export type LabAction = 'capabilities' | 'prepare' | 'status' | 'command' | 'grade' | 'finish'
+export type LabAction = 'capabilities' | 'prepare' | 'status' | 'command' | 'grade' | 'finish' | 'edit-open' | 'edit-save' | 'edit-cancel'
 export class LabRequestError extends Error {
   status: number
-  constructor(status: number) {
-    super(status === 401 ? 'Sesión o acceso al laboratorio no disponible.' :
+  constructor(status: number, editing = false) {
+    super(editing && status===400 ? 'No se aplicaron los cambios: comprueba el YAML y modifica solo los campos del ejercicio.' : status === 401 ? 'Sesión o acceso al laboratorio no disponible.' :
       status === 429 ? 'Demasiadas operaciones. Espera un minuto para continuar.' :
       status === 409 ? 'Hay un intento u operación en curso. Espera o termina el intento activo.' :
       status === 400 ? 'Ese comando no está permitido en este laboratorio.' :
@@ -21,12 +23,20 @@ export class LabSession {
   private pending: AbortController | null = null
   private disposed = false
   private epoch = 0
+  private editor: EditorTransport | null = null
   private fetcher: typeof fetch
   constructor(fetcher: typeof fetch, origin: string) {
     if (origin !== CKA_ORIGIN) throw new LabRequestError(403)
     this.fetcher = (input, options) => fetcher.call(globalThis, input, options)
   }
-  dispose() { this.disposed = true; this.epoch++; this.pending?.abort() }
+  dispose() { this.disposed = true; this.epoch++; this.pending?.abort(); this.editor?.close() }
+  async edit(id: string, editor: string, io: EditorIO) {
+    if (this.disposed || this.editor) throw new LabRequestError(409)
+    const transport = new EditorTransport(this.fetcher,io,()=>!this.disposed)
+    this.editor=transport
+    try { await transport.run(id,editor) }
+    finally { if (this.editor===transport) this.editor=null }
+  }
   async request<T>(action: LabAction, data: Record<string, string> = {}): Promise<T> {
     if (this.disposed) throw new LabRequestError(401)
     if (this.pending) throw new LabRequestError(409)
@@ -52,7 +62,10 @@ export class LabSession {
         body: JSON.stringify(data), signal: controller.signal,
       })
       current()
-      if (!response.ok) throw new LabRequestError(response.status)
+      if (!response.ok) {
+        if (action==='edit-save' && response.status===400) throw new LabRequestError(400,true)
+        throw new LabRequestError(response.status)
+      }
       const raw = await response.text()
       current()
       if (raw.length > 262144) throw new LabRequestError(503)

@@ -18,6 +18,7 @@ import tempfile
 import time
 
 from .candidate_kubectl import NAMESPACE, NAME, plan_candidate_command
+from .candidate_filters import split_filter
 
 
 CONTEXT = "kind-cka-lab-staging"
@@ -81,10 +82,11 @@ def namespace_policy(lease_id, namespace, deployment):
     ]
 
 
-def run_bounded(argv, *, input_text=None, timeout=12, limit=131072):
+def run_bounded(argv, *, input_text=None, timeout=12, limit=131072, accepted_codes=(0,)):
     """Bound child lifetime and both pipes, including a nonreading/stuck child."""
     if (not isinstance(argv, list) or not argv or not all(type(x) is str for x in argv)
-            or not 0 < timeout <= 40 or not 0 < limit <= 262144):
+            or not 0 < timeout <= 40 or not 0 < limit <= 262144
+            or accepted_codes not in ((0,), (0, 1))):
         raise ClusterUnavailable()
     data = b"" if input_text is None else input_text.encode("utf-8")
     if len(data) > 65536:
@@ -126,7 +128,7 @@ def run_bounded(argv, *, input_text=None, timeout=12, limit=131072):
                             key.data.extend(chunk)
                             if len(key.data) > (limit if key.data is output else 4096):
                                 raise ClusterUnavailable()
-        if process.wait(timeout=max(0.001, deadline - time.monotonic())) != 0:
+        if process.wait(timeout=max(0.001, deadline - time.monotonic())) not in accepted_codes:
             raise ClusterUnavailable()
         return output.decode("utf-8", errors="strict")
     except (OSError, ValueError, subprocess.SubprocessError, ClusterUnavailable):
@@ -231,10 +233,32 @@ class LeasedCluster:
                    "--request-timeout=8s"]
 
     def command(self, lease_id, scenario, command):
+        command, grep = split_filter(command)
         args = plan_candidate_command(command, namespace=scenario.namespace,
                                       deployment=scenario.deployment, service=scenario.service)
+        if grep is not None and args[0] not in {'get', 'describe', 'explain'}:
+            from .candidate_kubectl import CandidateCommandError
+            raise CandidateCommandError()
         with self._candidate(lease_id, scenario.namespace) as base:
-            return run_bounded(base + args)
+            output = run_bounded(base + args)
+        return run_bounded(grep, input_text=output, timeout=1, accepted_codes=(0,1)) if grep else output
+
+    def edit_snapshot(self, lease_id, scenario, kind, name):
+        from .lab_editor import edit_target
+        if edit_target('kubectl edit '+kind+'/'+name,scenario) != (kind,name):
+            raise ClusterUnavailable()
+        with self._candidate(lease_id,scenario.namespace) as base:
+            try:
+                return json.loads(run_bounded(base+['get',kind,name,'-n',scenario.namespace,'-o','json'],limit=65536))
+            except (ValueError,TypeError):
+                raise ClusterUnavailable() from None
+
+    def edit_apply(self, lease_id, scenario, kind, name, patch):
+        from .lab_editor import edit_target
+        if edit_target('kubectl edit '+kind+'/'+name,scenario) != (kind,name):
+            raise ClusterUnavailable()
+        with self._candidate(lease_id,scenario.namespace) as base:
+            run_bounded(base+['patch',kind,name,'-n',scenario.namespace,'--type=json','--patch',json.dumps(patch)])
 
     def grade(self, lease_id, scenario):
         from .grading import grade_state

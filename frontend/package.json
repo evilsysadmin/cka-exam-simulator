@@ -13,7 +13,7 @@
     "test:account": "node --experimental-strip-types tests/identitySession.test.ts",
     "test:account-browser": "node tests/account-browser.mjs",
     "build:lab-staging": "tsc --noEmit && vite build --config vite.lab.config.ts && node scripts/prepare-public.mjs lab-staging",
-    "test:labs": "node --experimental-strip-types tests/labSession.test.ts && node --experimental-strip-types tests/releaseUpdate.test.ts",
+    "test:labs": "node --experimental-strip-types tests/labSession.test.ts && node --experimental-strip-types tests/releaseUpdate.test.ts && node --experimental-strip-types tests/editorTransport.test.ts",
     "test:labs-browser": "node tests/labs-browser.mjs"
   },
   "dependencies": {

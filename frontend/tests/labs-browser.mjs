@@ -25,7 +25,21 @@ try{
   for(const [name,width,height,mobile] of [['desktop',1440,1000,false],['mobile',390,844,true]]){
     const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile})
     let publishedBuild=builtRelease.build
+    let editorInputs='', editorResizes=0, editorOpen=0, editorSaves=0
     let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0,readCalls=0,capabilityFailure=null,otherUserBusy=true
+    await context.routeWebSocket('wss://cka-labs-staging.shadowops.dpdns.org/api/labs/editor',socket=>{
+      socket.onMessage(raw=>{
+        const frame=JSON.parse(String(raw))
+        if(frame.type==='auth'){
+          assert.ok(frame.token.startsWith('synthetic-fresh-'))
+          if(frame.id){assert.equal(frame.id,current.session.id);assert.equal(frame.editor,'e'.repeat(32));socket.send(JSON.stringify({type:'output',data:'\x1b[?1049h\x1b[H GNU nano · resource.yaml\r\n'}))}
+        }else if(frame.type==='input'){
+          editorInputs+=frame.data
+          if(frame.data.includes('\x18')){socket.send(JSON.stringify({type:'output',data:'\x1b[?1049l'}));socket.send(JSON.stringify({type:'exit',code:0}))}
+        }else if(frame.type==='resize'){editorResizes++;assert.ok(frame.columns>=20);assert.ok(frame.rows>=6)}
+        else throw Error('Unexpected editor frame')
+      })
+    })
     await context.route('**/*',async route=>{
       const req=route.request(),url=new URL(req.url())
       if(url.origin===GAME){
@@ -64,7 +78,10 @@ try{
           repaired=false;result=current
         }else{
           assert.equal(data.id,current.session.id)
-          if(action==='command'){
+          if(action==='edit-open'){assert.equal(data.command,'k edit svc/catalog-api-svc');editorOpen++;result={editor:'e'.repeat(32)}}
+          else if(action==='edit-save'){assert.equal(data.editor,'e'.repeat(32));editorSaves++;repaired=true;result={output:'Cambios guardados en Kubernetes.'}}
+          else if(action==='edit-cancel'){result={status:'closed'}}
+          else if(action==='command'){
             if(data.command==='kubectl get pods'){readCalls++;result={output:'pod/ready'}}
             else {assert.equal(data.command,commands[scenarios.findIndex(s=>s.slug===current.scenario.slug)]);commandCalls++;repaired=true;result={output:'workload actualizado'}}
           }
@@ -95,13 +112,24 @@ try{
         assert.ok(terminal)
         const finishButton=page.getByRole('button',{name:'Finalizar intento',exact:true})
         assert.equal(await finishButton.evaluate(button=>button.tabIndex),-1)
+        await finishButton.evaluate(button=>button.focus())
+        await page.keyboard.press('Enter')
+        assert.equal(await page.getByRole('dialog').count(),0,'Enter on Finish must not even open confirmation')
+        assert.ok(current,'Enter must never finish the attempt')
         await finishButton.click()
         await page.getByRole('dialog').waitFor()
         assert.equal(await page.getByRole('button',{name:'Cancelar',exact:true}).evaluate(button=>button===document.activeElement),true)
         await page.keyboard.press('Enter')
         await page.getByRole('dialog').waitFor({state:'detached'})
         assert.ok(current,'Enter on default Cancel must keep the lease')
-        await finishButton.click();await page.keyboard.press('Escape')
+        await finishButton.click()
+        const destructive=page.getByRole('button',{name:'Sí, finalizar intento',exact:true})
+        assert.equal(await destructive.evaluate(button=>button.tabIndex),-1)
+        await destructive.evaluate(button=>button.focus())
+        await page.keyboard.press('Enter')
+        assert.ok(current,'Enter on the destructive confirmation must not finish')
+        await page.getByRole('dialog').waitFor()
+        await page.keyboard.press('Escape')
         await page.getByRole('dialog').waitFor({state:'detached'})
         assert.ok(current,'Escape must keep the lease')
         // Maximize/restore must preserve the actual xterm and its scrollback.
@@ -109,10 +137,11 @@ try{
         assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true)
         const height=await page.locator('.console-area').evaluate(element=>element.getBoundingClientRect().height)
         assert.ok(height>500,'Maximized terminal should use the viewport')
+        assert.equal(await page.locator('.terminal-maximized').evaluate(element=>{const r=element.getBoundingClientRect();return r.top<=12 && r.bottom>=innerHeight-12}),true)
         const objective=page.getByRole('button',{name:'Objetivo',exact:true})
         if(mobile)await objective.click();else await objective.hover()
         await page.getByRole('complementary',{name:'Objetivo del laboratorio'}).waitFor()
-        await page.screenshot({path:path.join(output,name+'-terminal-maximized.png'),fullPage:true})
+        await page.screenshot({path:path.join(output,name+'-terminal-maximized.png'),fullPage:false})
         await page.getByRole('button',{name:'Restaurar terminal',exact:true}).click()
         assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true)
         if(/^[a-f0-9]{40}$/.test(builtRelease.build)){
@@ -156,6 +185,21 @@ try{
       }
       await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click()
       await page.getByText(/Todavía no está resuelto/).waitFor()
+      if(index===1){
+        const input=page.locator('.xterm-helper-textarea');await input.focus()
+        await page.keyboard.type('k edit svc/catalog-api-svc');await page.keyboard.press('Enter')
+        await page.locator('.terminal-screen[data-editor-active="true"]').waitFor()
+        assert.equal(await page.getByRole('button',{name:'Recargar',exact:true}).isDisabled(),true)
+        assert.equal(await page.getByRole('button',{name:'Finalizar intento',exact:true}).isDisabled(),true)
+        await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
+        await input.focus();await page.keyboard.press('Tab');await page.keyboard.press('Control+o');await page.keyboard.press('Enter');await page.keyboard.press('Control+x')
+        await page.locator('.terminal-screen[data-editor-active="true"]').waitFor({state:'hidden'})
+        await page.getByRole('status').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
+        assert.ok(editorInputs.includes('\t'));assert.ok(editorInputs.includes('\x0f'));assert.ok(editorInputs.includes('\x18'))
+        assert.equal(editorOpen,1);assert.equal(editorSaves,1);assert.ok(editorResizes>0)
+        await page.getByRole('button',{name:'Restaurar terminal',exact:true}).click()
+        assert.equal(await page.getByRole('button',{name:'Recargar',exact:true}).isDisabled(),false)
+      }
       const input=page.locator('.xterm-helper-textarea');await input.focus()
       await page.keyboard.type(commands[index]);await page.keyboard.press('Enter')
       await page.getByRole('status').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
