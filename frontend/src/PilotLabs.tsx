@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import TerminalPanel from './Terminal'
-import { LabSession } from './labSession'
+import { LabRequestError, LabSession } from './labSession'
 
 type Scenario = { slug: string; title: string; story: string; domain: string; difficulty: string;
   minutes: number; statement: string; namespace: string }
@@ -58,7 +58,18 @@ export function PilotLabs() {
       if (busyRef.current) return
       busyRef.current = true; setBusy('Comprobando acceso…')
       try { await refresh(client); if (alive) setError('') }
-      catch (e) { if (alive) { setError(e instanceof Error ? e.message : 'Laboratorio no disponible'); setCapabilities(null); restore(null) } }
+      catch (e) {
+        if (alive) {
+          setError(e instanceof Error ? e.message : 'Laboratorio no disponible')
+          // A temporary 409/503 on the background poll must not destroy a
+          // still-live terminal, its scrollback or the local countdown. The
+          // server still authorizes every command against fresh Identity state.
+          // Auth denial or malformed data must immediately remove the view.
+          if (!(e instanceof LabRequestError && [409, 503].includes(e.status))) {
+            setCapabilities(null); restore(null); setGrade(null)
+          }
+        }
+      }
       finally { if (alive) { busyRef.current = false; setBusy('') } }
     }
     void check()
