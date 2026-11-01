@@ -13,6 +13,10 @@ Snapshot: 2026-11-01, `main` at `c5df16dad4b7b16fb51929a6bbdd078705aca376`. This
 
 Evidence for this snapshot: [merged PR #44](https://github.com/evilsysadmin/cka-exam-simulator/pull/44), [CI run](https://github.com/evilsysadmin/cka-exam-simulator/actions/runs/41327802012), [lab image workflow](https://github.com/evilsysadmin/cka-exam-simulator/actions/runs/41327802019), [account image workflow](https://github.com/evilsysadmin/cka-exam-simulator/actions/runs/41327802048).
 
+## Actual shared A1 preflight (read-only)
+
+The [Infra host preflight on 2026-11-01](https://github.com/evilsysadmin/shadowops-infra/actions/runs/41328656310) reported 4,065 MiB available RAM, 25,389 MiB available disk and available resource headroom, but also `lab_wrapper=false`, `rootless_dockerd=false`, `rootlesskit=false`, `newuidmap=false`, `newgidmap=false`, `operator_sudo=false` and `pilot_enabled=false`. The **installed-runtime inspection job was skipped** on that push. This is direct evidence that the first manual/operator rootless bootstrap is the immediate deployment blocker *at that observation time*; it is not proof of the host's state forever. CI's successful disposable rootless Docker proof does not install these components on the A1.
+
 ## Not verified by source CI
 
 No authenticated *real-user* complete run against the actual OCI A1 staging install is established here. In particular, source CI does not prove a provisioned Identity client and authoritative freshness service, accepted image digest, private Kubernetes bootstrap, installed runtime secrets, live HTTPS tunnel/DNS, Pages activation, release SHA parity, or real login/repair/grade/finish/revocation. These are independently owned operational gates.
