@@ -149,7 +149,8 @@ try{
       await page.getByRole('button',{name:'Finalizar intento',exact:true}).click()
       await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).waitFor()
     }
-    assert.equal(commandCalls,4)\n    assert.equal(readCalls,1)
+    assert.equal(commandCalls,4)
+    assert.equal(readCalls,1)
     await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click()
     await page.getByRole('link',{name:'Continuar con ShadowOps',exact:true}).waitFor()
     assert.equal(await page.getByRole('region',{name:'Laboratorios CKA'}).count(),0)
