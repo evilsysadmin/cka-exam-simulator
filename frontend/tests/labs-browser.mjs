@@ -118,14 +118,17 @@ try{
         if(/^[a-f0-9]{40}$/.test(builtRelease.build)){
           publishedBuild='not-a-release'
           const invalidCheck=page.waitForResponse(response=>response.url().startsWith(GAME+'/release.json?'))
+          const invalidCapabilities=page.waitForResponse(response=>response.url()===LABS+'/api/labs/capabilities')
           await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
-          await (await invalidCheck).finished()
+          await Promise.all([(await invalidCheck).finished(),(await invalidCapabilities).finished()])
           await page.evaluate(()=>new Promise(requestAnimationFrame))
           assert.equal(await page.getByText('Nueva versión disponible',{exact:true}).count(),0)
           publishedBuild=builtRelease.build==='d'.repeat(40)?'e'.repeat(40):'d'.repeat(40)
           const newCheck=page.waitForResponse(response=>response.url().startsWith(GAME+'/release.json?'))
+          const newCapabilities=page.waitForResponse(response=>response.url()===LABS+'/api/labs/capabilities')
           await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
-          await (await newCheck).finished()
+          await Promise.all([(await newCheck).finished(),(await newCapabilities).finished()])
+          await page.evaluate(()=>new Promise(requestAnimationFrame))
           await page.getByText('Nueva versión disponible',{exact:true}).waitFor()
           assert.equal(await page.evaluate(node=>document.querySelector('.terminal-screen')===node,terminal),true,'Update check must not reload a live lab')
         }
