@@ -6,6 +6,7 @@ export class LabRequestError extends Error {
   status: number
   constructor(status: number) {
     super(status === 401 ? 'Sesión o acceso al laboratorio no disponible.' :
+      status === 429 ? 'Demasiadas operaciones. Espera un minuto para continuar.' :
       status === 409 ? 'Hay un intento u operación en curso. Espera o termina el intento activo.' :
       status === 400 ? 'Ese comando no está permitido en este laboratorio.' :
       'El laboratorio no está disponible. Reintenta en unos instantes.')

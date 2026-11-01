@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from cka_sim.catalog import load_bank
-from cka_sim.lab_api import HOST, ORIGIN, create_lab_app, pilot_authorizer
+from cka_sim.lab_api import HOST, ORIGIN, create_lab_app, pilot_authorizer, staging_authorizer
 from cka_sim.lab_controller import LabController
 from cka_sim.lease_process import LeaseRejected
 from cka_sim.leased_kube import ClusterUnavailable
@@ -278,5 +278,86 @@ def test_lifespan_readiness_survives_reaper_skipped_by_active_operation():
         time.sleep(0.1)
         assert api.get("/readyz").status_code == 200
         assert app.state.ready is True
+
+
+def authenticated_setup(material):
+    import time
+    calls = []
+    def authority(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        return httpx.Response(200, json={**asdict(material[3]), "audience": "cka-simulator",
+            "subject": body["subject"], "session_version": body["session_version"],
+            "token_jti": body["token_jti"], "checked_at": int(time.time())})
+    journal, cluster = Journal(), Cluster()
+    controller = LabController(leases=journal, cluster=cluster, bank=load_bank(), pilot_subject=None,
+        access_mode="authenticated-staging", authenticate=staging_authorizer(jwks=material[1],
+            credential="soc1_" + "A" * 43, access_mode="authenticated-staging",
+            transport=httpx.MockTransport(authority)))
+    api = TestClient(create_lab_app(controller=controller, build="a" * 40), base_url="https://" + HOST)
+    api.app.state.ready = True
+    return api, journal, cluster, calls
+
+
+def authenticated_headers(material, *, other=False):
+    import base64
+    claims = dict(material[2])
+    if other:
+        claims.update(sub="22222222-2222-4222-8222-222222222222",
+                      jti=base64.urlsafe_b64encode(b"b" * 16).rstrip(b"=").decode())
+    return {"Origin": ORIGIN, "Authorization": "Bearer " + signed(material[0], claims)}
+
+
+def test_authenticated_users_share_one_slot_without_seeing_or_controlling_another_attempt(material):
+    api, journal, cluster, calls = authenticated_setup(material)
+    first, second = authenticated_headers(material), authenticated_headers(material, other=True)
+    assert post(api, first, "capabilities").json()["available"] is True
+    attempt = post(api, first, "prepare", slug="scale-payment-api").json()
+    identity = attempt["session"]["id"]
+    other_view = post(api, second, "capabilities")
+    assert other_view.status_code == 200
+    assert other_view.json()["current"] is None and other_view.json()["available"] is False
+    assert identity not in json.dumps(other_view.json())
+    assert attempt["scenario"]["namespace"] not in json.dumps(other_view.json())
+    for action in ("status", "command", "grade", "finish"):
+        body = {"id": identity, **({"command": "kubectl get pods"} if action == "command" else {})}
+        assert post(api, second, action, **body).status_code == 401
+    assert post(api, second, "prepare", slug="scale-payment-api").status_code == 409
+    assert cluster.calls == ["provision"]
+    assert post(api, first, "finish", id=identity).status_code == 200
+    assert post(api, second, "capabilities").json()["available"] is True
+    next_attempt = post(api, second, "prepare", slug="scale-payment-api")
+    assert next_attempt.status_code == 200
+    assert journal.owner != SUBJECT
+    assert post(api, first, "status", id=next_attempt.json()["session"]["id"]).status_code == 401
+    assert all(c["subject"] in {SUBJECT, journal.owner} for c in calls)
+
+
+def test_authenticated_mode_does_not_accept_anonymous_forged_or_other_product_tokens(material):
+    api, journal, cluster, calls = authenticated_setup(material)
+    assert post(api, {"Origin": ORIGIN}, "prepare", slug="scale-payment-api").status_code == 401
+    for claims in [{**material[2], "aud": "chronicles"}, {**material[2], "iss": "https://wrong.invalid"}]:
+        headers = {"Origin": ORIGIN, "Authorization": "Bearer " + signed(material[0], claims)}
+        assert post(api, headers, "prepare", slug="scale-payment-api").status_code == 401
+    assert post(api, {**authenticated_headers(material), "Authorization": "Bearer forged"}, "capabilities").status_code == 401
+    assert calls == [] and journal.lease is None and cluster.calls == []
+
+
+def test_one_authenticated_subject_cannot_consume_the_entire_authority_budget(material):
+    api, journal, cluster, calls = authenticated_setup(material)
+    first, second = authenticated_headers(material), authenticated_headers(material, other=True)
+    for _ in range(36):
+        assert post(api, first, "capabilities").status_code == 200
+    limited = post(api, first, "capabilities")
+    assert limited.status_code == 429 and limited.headers["retry-after"] == "60"
+    assert post(api, second, "capabilities").status_code == 200
+    assert len(calls) == 37 and cluster.calls == []
+
+
+@pytest.mark.parametrize("mode,pilot", [("public", None), ("authenticated-staging", SUBJECT), ("pilot", None)])
+def test_access_policy_never_defaults_open_or_combines_pilot_and_all_user_modes(material, mode, pilot):
+    with pytest.raises(ValueError):
+        staging_authorizer(jwks=material[1], credential="soc1_" + "A" * 43,
+                           access_mode=mode, pilot_subject=pilot)
 
 

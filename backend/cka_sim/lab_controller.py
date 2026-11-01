@@ -2,7 +2,8 @@
 
 The authorizer must be the trusted signature AND authoritative freshness check.
 It runs under the actor lock on every candidate operation, including status and
-finish. A request/body UUID is never accepted. Only the operator binds the pilot.
+finish. A request/body UUID is never accepted. The operator explicitly selects
+the restricted pilot or authenticated staging POC; capacity stays globally one.
 """
 from __future__ import annotations
 
@@ -31,6 +32,11 @@ class LabUnavailable(RuntimeError):
     pass
 
 
+class LabRateLimited(RuntimeError):
+    def __init__(self):
+        super().__init__("Lab request budget exhausted")
+
+
 def scenario_model(data):
     from .models import Scenario
     return Scenario.model_validate_json(json.dumps(data))
@@ -38,12 +44,15 @@ def scenario_model(data):
 
 class LabController:
     def __init__(self, *, leases, cluster, bank, authenticate, pilot_subject,
-                 parse_scenario=scenario_model):
-        if (type(pilot_subject) is not str or not UUID.fullmatch(pilot_subject)
-                or not callable(authenticate) or not bank):
-            raise ValueError("Verified pilot UUID and curated bank required")
+                 access_mode="pilot", parse_scenario=scenario_model):
+        if (access_mode not in {"pilot", "authenticated-staging"}
+                or not callable(authenticate) or not bank
+                or (access_mode == "pilot" and (type(pilot_subject) is not str or not UUID.fullmatch(pilot_subject)))
+                or (access_mode == "authenticated-staging" and pilot_subject is not None)):
+            raise ValueError("Explicit staging access policy and curated bank required")
         self.leases, self.cluster, self.bank = leases, cluster, bank
         self.authenticate, self.pilot_subject = authenticate, pilot_subject
+        self.access_mode = access_mode
         self.parse_scenario = parse_scenario
         self.lock = threading.Lock()
         # Recovery pointer only. Go still checks the owner/phase on every read;
@@ -53,9 +62,12 @@ class LabController:
     def _owner(self, token):
         try:
             subject = self.authenticate(token)
+        except LabRateLimited:
+            raise
         except Exception:
             raise LabDenied("Authentication required") from None
-        if type(subject) is not str or subject != self.pilot_subject:
+        if (type(subject) is not str or not UUID.fullmatch(subject)
+                or (self.access_mode == "pilot" and subject != self.pilot_subject)):
             raise LabDenied("Lab access unavailable")
         return subject
 
@@ -86,6 +98,7 @@ class LabController:
                     except LeaseRejected:
                         self.current = None
                 return {"labs_enabled": True, "capacity": 1,
+                        "available": self.current is None,
                         "scenarios": [s.candidate_view() for s in self.bank.values()], "current": current}
             if action == "prepare":
                 if type(slug) is not str or slug not in self.bank:
