@@ -109,6 +109,16 @@ try{
       await page.getByRole('status').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
       await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click()
       await page.getByText(/Ejercicio resuelto/).waitFor()
+      const layout=await page.locator('.lab').evaluate(lab=>{
+        const bounds=lab.getBoundingClientRect()
+        const elements=[...lab.querySelectorAll('.clock, .clock strong, .action-buttons button')]
+        return {count:elements.length,clipped:elements.some(element=>{
+          const rect=element.getBoundingClientRect()
+          return rect.left<bounds.left-1 || rect.right>bounds.right+1 || rect.width<=0
+        })}
+      })
+      assert.equal(layout.count,4)
+      assert.equal(layout.clipped,false,'Timer or action buttons were clipped inside the workspace')
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
       assert.equal(await page.evaluate(()=>localStorage.length+sessionStorage.length),0)
       await page.screenshot({path:path.join(output,name+'-'+scenarios[index].slug+'.png'),fullPage:true})
