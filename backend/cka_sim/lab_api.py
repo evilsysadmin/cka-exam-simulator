@@ -15,6 +15,8 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from .candidate_kubectl import CandidateCommandError
+from .lab_editor import EditRejected
+from .lab_editor_socket import install_editor_socket
 from .identity_freshness import verify_current_staging_cka_session
 from .identity_poc import IdentityPoCError, _json_object, _keys
 from .identity_transport import IdentityFreshnessClient
@@ -24,7 +26,9 @@ HOST = "cka-labs-staging.shadowops.dpdns.org"
 ORIGIN = "https://staging.cka.shadowops.dpdns.org"
 CONFIG = Path("/run/secrets/cka-lab-staging.json")
 ACTIONS = {"capabilities": set(), "prepare": {"slug"}, "status": {"id"},
-           "command": {"id", "command"}, "grade": {"id"}, "finish": {"id"}}
+           "command": {"id", "command"}, "grade": {"id"}, "finish": {"id"},
+           "edit-open": {"id", "command"}, "edit-save": {"id", "editor"},
+           "edit-cancel": {"id", "editor"}}
 
 
 def pilot_authorizer(*, jwks, credential, pilot_subject, transport=None):
@@ -32,8 +36,8 @@ def pilot_authorizer(*, jwks, credential, pilot_subject, transport=None):
                               pilot_subject=pilot_subject, transport=transport)
 
 
-def staging_authorizer(*, jwks, credential, access_mode, pilot_subject=None, transport=None):
-    if (access_mode not in {"pilot", "authenticated-staging"}
+def staging_authorizer(*, jwks, credential, access_mode, pilot_subject=None, transport=None, editor_stream=False):
+    if (type(editor_stream) is not bool or access_mode not in {"pilot", "authenticated-staging"}
             or (access_mode == "pilot" and (type(pilot_subject) is not str or not UUID.fullmatch(pilot_subject)))
             or (access_mode == "authenticated-staging" and pilot_subject is not None)):
         raise ValueError("Explicit staging access policy required")
@@ -51,8 +55,8 @@ def staging_authorizer(*, jwks, credential, access_mode, pilot_subject=None, tra
             if time.monotonic() - started >= 60:
                 started, count = time.monotonic(), 0
                 subjects.clear()
-            if (count >= (36 if access_mode == "pilot" else 60)
-                    or subjects.get(subject, 0) >= 36
+            if (count >= (18 if editor_stream else 36 if access_mode == "pilot" else 60)
+                    or subjects.get(subject, 0) >= (18 if editor_stream else 36)
                     or (subject not in subjects and len(subjects) >= 128)):
                 raise LabRateLimited()
             count += 1
@@ -178,8 +182,13 @@ def create_lab_app(*, controller, build, close=None):
             if not app.state.ready:
                 return JSONResponse({"detail": "Laboratorio temporalmente no disponible"}, status_code=503)
             result = await run_in_threadpool(controller.operation, headers[0][7:], action,
-                identity=data.get("id"), slug=data.get("slug"), command=data.get("command"))
+                identity=data.get("id"), slug=data.get("slug"), command=data.get("command"), editor=data.get("editor"))
             return result
+        except EditRejected as error:
+            messages = {'invalid':'El manifiesto no es válido o cambia campos no permitidos.',
+                        'conflict':'Ya hay una edición abierta. Cierra el editor antes de abrir otro.',
+                        'unavailable':'La edición ha terminado o no está disponible.'}
+            return JSONResponse({'detail':messages[error.code]},status_code=401 if error.code == 'unavailable' else 400)
         except CandidateCommandError:
             return JSONResponse({"detail": "Comando no permitido en este laboratorio"}, status_code=400)
         except LabDenied:
@@ -192,6 +201,7 @@ def create_lab_app(*, controller, build, close=None):
         except LabUnavailable:
             return JSONResponse({"detail": "Laboratorio temporalmente no disponible"}, status_code=503)
 
+    install_editor_socket(app,controller,HOST,ORIGIN)
     return app
 
 
@@ -201,6 +211,7 @@ def configured_app():
     from .lease_process import LeaseProcess
     from .leased_kube import LeasedCluster
     leases = None
+    editors = None
     try:
         if CONFIG.is_symlink() or not CONFIG.is_file() or CONFIG.stat().st_size > 24576:
             raise ValueError()
@@ -217,14 +228,20 @@ def configured_app():
             raise ValueError()
         authenticate = staging_authorizer(jwks=json.dumps(config["jwks"]).encode(),
             credential=config["service_credential"], access_mode=access_mode, pilot_subject=pilot_subject)
+        authenticate_editor = staging_authorizer(jwks=json.dumps(config["jwks"]).encode(),
+            credential=config["service_credential"], access_mode=access_mode, pilot_subject=pilot_subject, editor_stream=True)
         journal = Path("/var/lib/cka-lab/journal")
         journal.mkdir(mode=0o700, parents=True, exist_ok=True)
         bank = load_bank()
         leases = LeaseProcess(journal=journal, bank=Path("/app/scenarios"))
+        from .lab_editor import NanoEditors
+        editors = NanoEditors()
         controller = LabController(leases=leases, cluster=LeasedCluster(), bank=bank,
-                                  authenticate=authenticate, pilot_subject=pilot_subject, access_mode=access_mode)
-        return create_lab_app(controller=controller, build=config["build"], close=leases.close)
+                                  authenticate=authenticate, pilot_subject=pilot_subject, access_mode=access_mode, editors=editors, authenticate_editor=authenticate_editor)
+        return create_lab_app(controller=controller, build=config["build"], close=lambda: (editors.close(),leases.close()))
     except Exception:
+        if editors:
+            editors.close()
         if leases:
             leases.close()
         raise RuntimeError("Invalid private CKA lab staging configuration") from None

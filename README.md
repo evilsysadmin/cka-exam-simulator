@@ -302,3 +302,24 @@ test gates, security boundaries and future `client-go` handoff.
 2. Real PTY browser shell instead of restricted kubectl, plus exam sessions with authoritative server clock.
 3. Automated batch quality evaluation (novelty, repeated namespace/slug detection, actual live smoke) and explicit human publication gate.
 4. Expanded CKA domains and official blueprint mapping.
+
+### Editing and filtering in staging labs
+
+The owned lab terminal accepts `kubectl` and its `k` shorthand. Filter read output
+with a single stdin-only GNU grep pipeline, for example `k get pods | grep -i Running`.
+No file-search, recursive grep or general shell is exposed.
+
+Use `kubectl edit svc/<name>` or `kubectl edit deploy/<name>` to open **real GNU
+nano** on the live resource YAML. `nano svc/<name>` and `nano deploy/<name>` also
+open that editor. Save with Ctrl+O / Enter and leave with Ctrl+X. Exiting without
+saving leaves Kubernetes unchanged. The server accepts only the exercise's
+Service selector or Deployment replica/CPU fields, retaining its identity and
+resource version; invalid or stale edits do not overwrite other changes.
+
+The editor has its own short-lived PTY, scrubbed environment, kernel filesystem
+and syscall policy, resource limits, fresh Identity heartbeat and lease expiry. Heartbeats have a separate 18/minute
+nonmutating budget; the existing command/cluster-operation budget is unchanged.
+It receives no kubeconfig or service credential. Saving to Kubernetes requires
+fresh authorization again. Disconnect, revocation, finish and expiry close the
+editor. The deployment must verify the nano isolation probe on the actual A1
+before replacing its current controller.

@@ -1,7 +1,7 @@
 name: CKA restricted lab staging
 on:
   pull_request:
-    paths: ['backend/cka_sim/lab*.py','backend/cka_sim/leased_kube.py','backend/cka_sim/lease_process.py','backend/cka_sim/candidate_kubectl.py','backend/cka_sim/identity*.py','backend/tests/test_lab_api.py','deploy/**','go/**','scripts/check_lab_image_boot.py','.github/workflows/lab-staging.yml']
+    paths: ['backend/cka_sim/lab*.py','backend/cka_sim/leased_kube.py','backend/cka_sim/lease_process.py','backend/cka_sim/candidate_kubectl.py','backend/cka_sim/candidate_filters.py','backend/cka_sim/nano_sandbox.py','backend/cka_sim/identity*.py','backend/tests/test_lab_api.py','backend/tests/test_lab_editor.py','deploy/**','go/**','scripts/check_lab_image_boot.py','scripts/check_nano_image.py','.github/workflows/lab-staging.yml']
   push:
     branches: [main]
   workflow_dispatch:
@@ -20,10 +20,12 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install -r deploy/lab-requirements.txt pytest
+      - name: Install real editor for isolated PTY tests
+        run: sudo apt-get update -qq && sudo apt-get install --yes --no-install-recommends nano
       - name: Verify signature, live revocation, ownership, TTL and cleanup boundaries
         env:
           PYTHONPATH: backend
-        run: python -m pytest backend/tests/test_lab_api.py backend/tests/test_candidate_kubectl.py backend/tests/test_leased_kube.py
+        run: python -m pytest backend/tests/test_lab_api.py backend/tests/test_candidate_kubectl.py backend/tests/test_leased_kube.py backend/tests/test_lab_editor.py
       - name: Audit pinned lab runtime dependencies
         run: |
           python -m pip install pip-audit
@@ -34,6 +36,8 @@ jobs:
         run: |
           docker run --rm --read-only --network none --entrypoint python cka-lab-ci -c "import importlib.util; from cka_sim.lab_api import create_lab_app; from cka_sim.catalog import load_bank; assert len(load_bank())==3; assert all(importlib.util.find_spec('cka_sim.'+n) is None for n in ['api','kube','factory','session','providers','__main__']); print('CKA_LAB_IMAGE_ISOLATION_OK')"
           docker run --rm --read-only --network none --entrypoint kubectl cka-lab-ci version --client
+      - name: Prove real nano with the actual readonly image and no capabilities
+        run: python scripts/check_nano_image.py
       - name: Boot the real lab API with no cluster or network access
         run: python scripts/check_lab_image_boot.py
   publish:

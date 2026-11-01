@@ -116,3 +116,5 @@ h1 em{color:#77e6b9;font-style:normal}
 .release-update{display:flex;gap:16px;align-items:center;justify-content:space-between;border:1px solid #456f65;border-radius:9px;background:#15372f;padding:14px 18px;margin-bottom:16px;color:#bdebd7}
 .release-update strong,.release-update span{display:block}.release-update span{font-size:12px;margin-top:5px;color:#a9c9bd}.release-update button{flex-shrink:0}
 @media(max-width:500px){.terminal-maximized{inset:4px;padding:6px}.console-header{padding:0 8px}.console-label{margin-left:3px;font-size:9px}.terminal-size{font-size:10px;padding:5px 7px}.release-update{align-items:flex-start;flex-wrap:wrap}.objective-card{padding:13px}}
+
+.terminal-countdown{margin-left:auto;color:#a4decb;font:700 12px monospace;flex-shrink:0}.terminal-countdown.urgent{color:#ffb48c}
