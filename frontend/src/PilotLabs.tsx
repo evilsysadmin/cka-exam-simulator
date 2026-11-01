@@ -6,7 +6,7 @@ type Scenario = { slug: string; title: string; story: string; domain: string; di
   minutes: number; statement: string; namespace: string }
 type Attempt = { scenario: Scenario; session: { id: string; scenario_slug: string;
   phase: 'active' | 'expired' | 'closed'; remaining_seconds: number; expires_at: string } }
-type Capabilities = { labs_enabled: true; capacity: 1; scenarios: Scenario[]; current: Attempt | null }
+type Capabilities = { labs_enabled: true; capacity: 1; available?: boolean; scenarios: Scenario[]; current: Attempt | null }
 type Grade = { passed: boolean; score: number; checks: { name: string; passed: boolean }[] }
 
 function validScenario(value: Scenario) {
@@ -45,7 +45,7 @@ export function PilotLabs() {
     const result = await client.request<Capabilities>('capabilities')
     if (result.labs_enabled !== true || result.capacity !== 1 || !Array.isArray(result.scenarios) ||
       !result.scenarios.length || result.scenarios.length > 16 || !result.scenarios.every(validScenario) ||
-      !validAttempt(result.current)) throw Error('Laboratorio no disponible')
+      !validAttempt(result.current) || (result.available !== undefined && typeof result.available !== 'boolean')) throw Error('Laboratorio no disponible')
     setCapabilities(result)
     restore(result.current)
     setSelected(previous => result.current?.scenario.slug || previous || result.scenarios[0].slug)
@@ -61,11 +61,11 @@ export function PilotLabs() {
       catch (e) {
         if (alive) {
           setError(e instanceof Error ? e.message : 'Laboratorio no disponible')
-          // A temporary 409/503 on the background poll must not destroy a
+          // A temporary 409/429/503 on the background poll must not destroy a
           // still-live terminal, its scrollback or the local countdown. The
           // server still authorizes every command against fresh Identity state.
           // Auth denial or malformed data must immediately remove the view.
-          if (!(e instanceof LabRequestError && [409, 503].includes(e.status))) {
+          if (!(e instanceof LabRequestError && [409, 429, 503].includes(e.status))) {
             setCapabilities(null); restore(null); setGrade(null)
           }
         }
@@ -94,6 +94,7 @@ export function PilotLabs() {
   }
   const current = attempt?.scenario || capabilities?.scenarios.find(s => s.slug === selected)
   const active = attempt?.session.phase === 'active' && remaining > 12
+  const occupied = !attempt && capabilities?.available === false
   async function prepare() {
     if (!current || !transport.current) return
     await perform('Preparando laboratorio…', async () => {
@@ -139,8 +140,8 @@ export function PilotLabs() {
         <span className="scenario-number">{String(index + 1).padStart(2,'0')}</span>
         <span className="scenario-copy"><strong>{s.title}</strong><small>{s.domain} · {s.minutes} min</small></span>
       </button>)}
-      <div className="sidebar-footer"><span className="green-dot" /> UN INTENTO ACTIVO
-        <p>Termina tu intento para cambiar de ejercicio. Al agotarse el tiempo, el entorno se limpia automáticamente.</p></div>
+      <div className="sidebar-footer"><span className="green-dot" /> UNA PLAZA COMPARTIDA
+        <p>Una persona puede practicar cada vez. Termina tu intento para liberar la plaza; también se limpia al agotarse el tiempo.</p></div>
     </aside>
     <div className="lab"><div className="lab-header"><div className="lab-title">
       <span className="lab-kicker">TU MISIÓN / {current.domain.toUpperCase()}</span><h2>{current.title}</h2>
@@ -154,12 +155,13 @@ export function PilotLabs() {
         <span className="console-label"> TERMINAL / {attempt ? current.namespace : 'en espera'}</span></div></div>
       <div className="console-area">{active ? <TerminalPanel key={attempt!.session.id} staging scenario={current.slug} onCommand={command}/>
         : <div className="console-empty"><span className="console-placeholder">&gt;_</span>
-          <strong>{attempt ? 'El intento está terminando' : 'Prepara el ejercicio para empezar'}</strong>
-          <small>{attempt ? 'Puedes finalizarlo y comprobar de nuevo el acceso cuando termine la limpieza.' : 'Trabajarás con recursos reales de Kubernetes.'}</small></div>}</div>
+          <strong>{attempt ? 'El intento está terminando' : occupied ? 'El laboratorio está ocupado' : 'Prepara el ejercicio para empezar'}</strong>
+          <small>{attempt ? 'Puedes finalizarlo y comprobar de nuevo el acceso cuando termine la limpieza.' : occupied
+            ? 'Otra persona está practicando. Comprobaremos automáticamente cuándo queda libre.' : 'Trabajarás con recursos reales de Kubernetes.'}</small></div>}</div>
       <div className="action-bar"><div className="action-left" role="status">{busy || (active ? 'LABORATORIO ACTIVO' : 'EN ESPERA')}</div>
         <div className="action-buttons"><button className="button ghost" disabled={!active || Boolean(busy)} onClick={() => void checkGrade()}>Comprobar resultado</button>
           {attempt ? <button className="button primary" disabled={Boolean(busy)} onClick={() => void finish()}>Finalizar intento</button>
-            : <button className="button primary" disabled={Boolean(busy)} onClick={() => void prepare()}>Preparar laboratorio</button>}</div></div>
+            : <button className="button primary" disabled={Boolean(busy) || occupied} onClick={() => void prepare()}>Preparar laboratorio</button>}</div></div>
       {grade && <div className={'grade ' + (grade.passed ? 'passed' : 'failed')} role="status">
         <strong>{grade.passed ? '✓ Ejercicio resuelto' : 'Todavía no está resuelto'} · {grade.score}/100</strong>
         {grade.checks.map(c => <div key={c.name}>{c.passed ? '✓' : '✕'} {c.name}</div>)}</div>}

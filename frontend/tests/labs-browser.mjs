@@ -23,7 +23,7 @@ let last
 try{
   for(const [name,width,height,mobile] of [['desktop',1440,1000,false],['mobile',390,844,true]]){
     const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile})
-    let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0,readCalls=0,capabilityFailure=null
+    let logged=true,current=null, repaired=false,sequence=0,labCalls=0,commandCalls=0,readCalls=0,capabilityFailure=null,otherUserBusy=true
     await context.route('**/*',async route=>{
       const req=route.request(),url=new URL(req.url())
       if(url.origin===GAME){
@@ -52,7 +52,7 @@ try{
           const status=capabilityFailure; capabilityFailure=null
           return route.fulfill({status,json:{},headers})
         }
-        if(action==='capabilities')result={labs_enabled:true,capacity:1,scenarios,current}
+        if(action==='capabilities')result={labs_enabled:true,capacity:1,available:!current && !otherUserBusy,scenarios,current}
         else if(action==='prepare'){
           assert.equal(current,null)
           const scenario=scenarios.find(s=>s.slug===data.slug),index=scenarios.indexOf(scenario)
@@ -76,6 +76,13 @@ try{
     const page=await context.newPage();last=page;page.setDefaultTimeout(15000)
     await page.goto(GAME)
     await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).waitFor()
+    await page.getByText('El laboratorio está ocupado',{exact:true}).waitFor()
+    assert.equal(await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).isDisabled(),true)
+    assert.equal(await page.locator('.terminal-screen').count(),0)
+    await page.waitForFunction(()=>!document.querySelector('.action-left')?.textContent?.includes('Comprobando'))
+    otherUserBusy=false
+    await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+    await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Preparar laboratorio' && !b.disabled))
     for(let index=0;index<scenarios.length;index++){
       await page.getByRole('button',{name:new RegExp(scenarios[index].title)}).click()
       await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).click()
@@ -85,7 +92,7 @@ try{
         assert.ok(terminal)
         // A transient failed background check must preserve the actual xterm
         // node (and thus scrollback/input), even while a real lease is active.
-        for(const status of [503,409]){
+        for(const status of [503,409,429]){
           capabilityFailure=status
           await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
           await page.getByRole('alert').waitFor()

@@ -16,9 +16,9 @@ from starlette.concurrency import run_in_threadpool
 
 from .candidate_kubectl import CandidateCommandError
 from .identity_freshness import verify_current_staging_cka_session
-from .identity_poc import _json_object, _keys
+from .identity_poc import IdentityPoCError, _json_object, _keys
 from .identity_transport import IdentityFreshnessClient
-from .lab_controller import LabBusy, LabController, LabDenied, LabUnavailable
+from .lab_controller import LabBusy, LabController, LabDenied, LabUnavailable, LabRateLimited, UUID
 
 HOST = "cka-labs-staging.shadowops.dpdns.org"
 ORIGIN = "https://staging.cka.shadowops.dpdns.org"
@@ -28,25 +28,54 @@ ACTIONS = {"capabilities": set(), "prepare": {"slug"}, "status": {"id"},
 
 
 def pilot_authorizer(*, jwks, credential, pilot_subject, transport=None):
+    return staging_authorizer(jwks=jwks, credential=credential, access_mode="pilot",
+                              pilot_subject=pilot_subject, transport=transport)
+
+
+def staging_authorizer(*, jwks, credential, access_mode, pilot_subject=None, transport=None):
+    if (access_mode not in {"pilot", "authenticated-staging"}
+            or (access_mode == "pilot" and (type(pilot_subject) is not str or not UUID.fullmatch(pilot_subject)))
+            or (access_mode == "authenticated-staging" and pilot_subject is not None)):
+        raise ValueError("Explicit staging access policy required")
     _keys(jwks)
     upstream = IdentityFreshnessClient(credential, transport=transport, public_staging=True)
     lock = threading.Lock()
     started, count = time.monotonic(), 0
+    subjects = {}
 
     def evidence(subject, version, jti):
         nonlocal started, count
-        if subject != pilot_subject:
+        if access_mode == "pilot" and subject != pilot_subject:
             raise ValueError()
         with lock:
             if time.monotonic() - started >= 60:
                 started, count = time.monotonic(), 0
-            if count >= 36:
-                raise ValueError()
+                subjects.clear()
+            if (count >= (36 if access_mode == "pilot" else 60)
+                    or subjects.get(subject, 0) >= 36
+                    or (subject not in subjects and len(subjects) >= 128)):
+                raise LabRateLimited()
             count += 1
+            subjects[subject] = subjects.get(subject, 0) + 1
         return upstream(subject, version, jti)
 
     def authenticate(token):
-        return verify_current_staging_cka_session(token, jwks=jwks, check_freshness=evidence)
+        limited = False
+        def current(subject, version, jti):
+            nonlocal limited
+            try:
+                return evidence(subject, version, jti)
+            except LabRateLimited:
+                limited = True
+                raise
+        try:
+            return verify_current_staging_cka_session(token, jwks=jwks, check_freshness=current)
+        except IdentityPoCError:
+            # The freshness verifier intentionally normalizes authority errors.
+            # Reclassify only our trusted local budget, never a JWT claim.
+            if limited:
+                raise LabRateLimited() from None
+            raise
     return authenticate
 
 
@@ -157,6 +186,9 @@ def create_lab_app(*, controller, build, close=None):
             return JSONResponse({"detail": "Sesión o acceso al laboratorio no disponible"}, status_code=401)
         except LabBusy:
             return JSONResponse({"detail": "Laboratorio ocupado; termina el intento activo o espera a la limpieza"}, status_code=409)
+        except LabRateLimited:
+            return JSONResponse({"detail": "Demasiadas operaciones. Espera un minuto para continuar."},
+                                status_code=429, headers={"Retry-After": "60"})
         except LabUnavailable:
             return JSONResponse({"detail": "Laboratorio temporalmente no disponible"}, status_code=503)
 
@@ -164,7 +196,7 @@ def create_lab_app(*, controller, build, close=None):
 
 
 def configured_app():
-    """No default allowlist, automatic enrolment or user-selectable trust URL."""
+    """Private explicit access policy; no implicit opening or selectable trust URL."""
     from .catalog import load_bank
     from .lease_process import LeaseProcess
     from .leased_kube import LeasedCluster
@@ -173,18 +205,24 @@ def configured_app():
         if CONFIG.is_symlink() or not CONFIG.is_file() or CONFIG.stat().st_size > 24576:
             raise ValueError()
         config = _json_object(CONFIG.read_bytes())
-        if (set(config) != {"environment", "jwks", "service_credential", "pilot_subject", "build"}
-                or config["environment"] != "staging"
+        common = {"environment", "jwks", "service_credential", "build"}
+        if set(config) == common | {"pilot_subject"}:
+            access_mode, pilot_subject = "pilot", config["pilot_subject"]
+        elif set(config) == common | {"access_mode"} and config["access_mode"] == "authenticated-staging":
+            access_mode, pilot_subject = "authenticated-staging", None
+        else:
+            raise ValueError()
+        if (config["environment"] != "staging"
                 or config["build"] != os.environ.get("CKA_LAB_BUILD_SHA")):
             raise ValueError()
-        authenticate = pilot_authorizer(jwks=json.dumps(config["jwks"]).encode(),
-            credential=config["service_credential"], pilot_subject=config["pilot_subject"])
+        authenticate = staging_authorizer(jwks=json.dumps(config["jwks"]).encode(),
+            credential=config["service_credential"], access_mode=access_mode, pilot_subject=pilot_subject)
         journal = Path("/var/lib/cka-lab/journal")
         journal.mkdir(mode=0o700, parents=True, exist_ok=True)
         bank = load_bank()
         leases = LeaseProcess(journal=journal, bank=Path("/app/scenarios"))
         controller = LabController(leases=leases, cluster=LeasedCluster(), bank=bank,
-                                  authenticate=authenticate, pilot_subject=config["pilot_subject"])
+                                  authenticate=authenticate, pilot_subject=pilot_subject, access_mode=access_mode)
         return create_lab_app(controller=controller, build=config["build"], close=leases.close)
     except Exception:
         if leases:
