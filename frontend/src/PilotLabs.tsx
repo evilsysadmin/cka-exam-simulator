@@ -108,6 +108,9 @@ export function PilotLabs() {
       const result = await transport.current!.request<{status: string}>('finish', { id: attempt.session.id })
       if (result.status !== 'closed') throw Error('Limpieza aún no confirmada')
       restore(null); setGrade(null)
+      // Verified cleanup releases our slot. A concurrent claim is still
+      // serialized by the server and reported by the next capabilities poll.
+      setCapabilities(previous => previous ? { ...previous, current: null, available: true } : previous)
     }).catch(() => {})
   }
   async function checkGrade() {
