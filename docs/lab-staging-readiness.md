@@ -9,6 +9,7 @@ Snapshot: 2026-11-01, `main` at `c5df16dad4b7b16fb51929a6bbdd078705aca376`. This
 - `frontend/src/PilotLabs.tsx` and `labSession.ts` implement the dedicated staging browser flow: central token exchange on each operation, prepare, restricted `kubectl`, grade, finish, resume, and busy-slot display. The browser tests use **synthetic Identity/lab responses**, not live A1.
 - `lab_api.py` supports an explicitly configured `authenticated-staging` mode and a rollback single-subject pilot. Every candidate operation requires fresh authoritative Identity evidence and lease ownership; global capacity is **one active lab**.
 - `.github/workflows/lab-staging.yml` checks lab isolation, authorization/ownership and fail-closed boot and, on `main`, publishes a provenance-attested multiarch lab image. `.github/workflows/account-staging.yml` separately publishes the account image. A successful publish job is **not evidence of rollout**.
+- Separately, `shadowops-infra` **already includes** a private rootless Compose contract, signed image admission, bounded kind bootstrap/inspection and CI that boots the published controller against real disposable Kubernetes with synthetic TLS Identity and two distinct users. These controls must not be reimplemented as though absent. [Infra staging guide](https://github.com/evilsysadmin/shadowops-infra/blob/main/docs/cka-lab-staging.md), [successful preflight workflow](https://github.com/evilsysadmin/shadowops-infra/actions/runs/41328656310).
 
 Evidence for this snapshot: [merged PR #44](https://github.com/evilsysadmin/cka-exam-simulator/pull/44), [CI run](https://github.com/evilsysadmin/cka-exam-simulator/actions/runs/41327802012), [lab image workflow](https://github.com/evilsysadmin/cka-exam-simulator/actions/runs/41327802019), [account image workflow](https://github.com/evilsysadmin/cka-exam-simulator/actions/runs/41327802048).
 
@@ -18,17 +19,20 @@ No authenticated *real-user* complete run against the actual OCI A1 staging inst
 
 Do not call this a usable public lab until a **separate, auditable staging acceptance record** links the running source/image digests, deployment receipts, and the end-to-end results. Never infer readiness from a green build, a container image, a DNS entry, or an HTTP 200 `/livez`.
 
-## Next small Infra PR: fail-closed private A1 lab admission (no public activation)
+## Next small Infra PR: operator-controlled private cluster bootstrap (after rootless runtime)
 
-Target: `evilsysadmin/shadowops-infra`, after inspection of its current `AGENTS.md` and deployment conventions. One PR, limited to the **lab API runtime only**, on the existing A1. This does not deploy account/Identity, turn on Pages, create new OCI capacity, or open public routes.
+**Dependency:** [Infra PR #387](https://github.com/evilsysadmin/shadowops-infra/pull/387) is already working on the admin rootless-runtime bootstrap/inspection Make targets. **Do not duplicate it.** Check that PR's current status and merged source before starting this follow-up.
 
-1. Declare a rootless private lab service pinned to an **approved immutable digest** and exact CKA source SHA, with a non-writable root filesystem, minimal writable journal, fixed private configuration file path and no Docker socket or general Internet egress.
-2. Make deployment/admission fail closed on absent/invalid policy, mismatched SHA/digest, unready cluster reconciliation or missing pre-provisioned, explicitly allowlisted Kubernetes context. Never create a permissive fallback.
-3. Add an **offline/CI contract test** proving the wiring rejects missing/mismatched inputs and cannot inadvertently publish a route, privileged dev API or generation endpoint.
-4. Provide rollback to the previous private deployment or disabled state. Produce an operator-only installation/handoff recipe that does not print credential values.
-5. Preserve current single-slot quota, namespace lease journal and cleanup semantics; no candidate-visible change.
+Target: `evilsysadmin/shadowops-infra`. The fixed private cluster bootstrap and read-only cluster verification already exist in `scripts/cka_lab_cluster.py`, and disposable CI already tests them. This proposed small PR only makes that **existing** next operator step repeatable and safely inspectable on the adopted A1. It must not deploy the controller, copy Identity secrets, modify Pages/Cloudflare DNS, enable the tunnel or activate public labs.
 
-**Acceptance:** exact digest and source SHA are recorded; admission cannot silently fall back to a floating tag; missing configuration fails before serving candidate operations; no public DNS/ingress or browser change; CI tests and current CKA image/security checks are green; an independent operator can verify `/readyz` and rollback *privately* without storing tokens in logs. Mark the PR **infrastructure prepared**, not **labs live**.
+1. Add a single narrowly named operator `make` target to invoke the existing `install-tools`, `bootstrap`, and `verify-cluster` actions under the fixed `shadowops-cka-lab` account, through the reviewed protected Infra checkout and the currently approved SSH/operator path. Add an independent **read-only** verify target.
+2. Before any mutation, verify the exact reviewed source SHA, expected rootless runtime receipt/policy, private lab identity, sufficient available capacity, and that no lab cluster is already installed; fail rather than adopt/delete unfamiliar state. Never fall back to host Docker, a different Kubernetes context or a privileged runner.
+3. Tests with synthetic SSH/Git/process fixtures must reject a wrong target, invalid source, missing runtime, existing/unexpected cluster, and failed bootstrap; propagate errors without claiming success, reset, cleanup or a public route. Keep all passwords, OCI credentials and kubeconfig out of logs.
+4. Preserve the current cluster limits, internal-only network, pinned images, quota-one lease design and safety contracts; document the already implemented read-only `CKA_LAB_CLUSTER_VERIFIED` marker and rollback boundary.
+
+**Acceptance:** operator action is explicit, exact-source and fail-closed; the same bounded private cluster is verified by the existing inspector; an unready A1 stops before public exposure; offline tests and the existing Infra rootless + published Compose CI are green; no account/Identity or user-facing deployment is claimed. If `#387` has not merged or the installed rootless-runtime receipt is missing, the operator invocation must remain gated.
+
+This is a proposal, **not an assertion that the host bootstrap is installed** or that a real lab is reachable.
 
 ## Later activation and live acceptance (separate, gated change)
 
