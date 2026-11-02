@@ -12,6 +12,7 @@ import re
 import threading
 
 from .candidate_kubectl import CandidateCommandError
+from .lab_editor import EditRejected, edit_target, edit_patch
 from .lease_process import LeaseRejected, LeaseUnavailable
 from .leased_kube import ClusterUnavailable
 
@@ -44,7 +45,7 @@ def scenario_model(data):
 
 class LabController:
     def __init__(self, *, leases, cluster, bank, authenticate, pilot_subject,
-                 access_mode="pilot", parse_scenario=scenario_model):
+                 access_mode="pilot", parse_scenario=scenario_model, editors=None, authenticate_editor=None):
         if (access_mode not in {"pilot", "authenticated-staging"}
                 or not callable(authenticate) or not bank
                 or (access_mode == "pilot" and (type(pilot_subject) is not str or not UUID.fullmatch(pilot_subject)))
@@ -58,10 +59,13 @@ class LabController:
         # Recovery pointer only. Go still checks the owner/phase on every read;
         # a controller restart closes/reaps its durable leases before reuse.
         self.current = None
+        self.editors = editors
+        self.authenticate_editor = authenticate_editor
 
-    def _owner(self, token):
+    def _owner(self, token, *, editing=False):
         try:
-            subject = self.authenticate(token)
+            authorizer = self.authenticate_editor if editing and self.authenticate_editor else self.authenticate
+            subject = authorizer(token)
         except LabRateLimited:
             raise
         except Exception:
@@ -83,11 +87,17 @@ class LabController:
             raise LabUnavailable("Lab state unavailable")
         return view, scenario
 
-    def operation(self, token, action, *, identity=None, slug=None, command=None):
+    def operation(self, token, action, *, identity=None, slug=None, command=None, editor=None):
         if not self.lock.acquire(blocking=False):
             raise LabBusy("Lab operation in progress")
         try:
-            owner = self._owner(token)
+            if action == 'edit-check':
+                # An opaque owned editor ticket selects the heartbeat budget,
+                # never authority. Signature/freshness and lease owner follow.
+                current = self.editors.current if self.editors else None
+                if not current or current.identity != editor or current.lease != identity:
+                    raise LabDenied('Editor unavailable')
+            owner = self._owner(token,editing=action == 'edit-check')
             if action == "capabilities":
                 current = None
                 if self.current and self.current[0] == owner:
@@ -126,6 +136,27 @@ class LabController:
                 cleanup = self.leases.finish(owner, identity)
                 self._cleanup(cleanup)
                 return {"status": "closed"}
+            if action in {'edit-open','edit-check','edit-save','edit-cancel'}:
+                view, scenario = self._active(owner, identity)
+                if not self.editors:
+                    raise EditRejected('unavailable')
+                if action == 'edit-open':
+                    kind, name = edit_target(command, scenario)
+                    snapshot = self.cluster.edit_snapshot(identity, scenario, kind, name)
+                    return self.editors.open(owner,identity,scenario,command,snapshot,view['remaining_seconds'])
+                state = self.editors.owned(owner,identity,editor)
+                if action == 'edit-check':
+                    return state
+                if action == 'edit-cancel':
+                    self.editors.close()
+                    return {'status':'closed'}
+                try:
+                    patch = edit_patch(state.original,self.editors.saved(state))
+                    if patch:
+                        self.cluster.edit_apply(identity,scenario,state.kind,state.name,patch)
+                    return {'output':'Cambios guardados en Kubernetes.' if patch else 'Sin cambios en Kubernetes.'}
+                finally:
+                    self.editors.close()
             if action in {"command", "grade"}:
                 _, scenario = self._active(owner, identity)
                 if action == "command":
@@ -136,7 +167,7 @@ class LabController:
             if exc.code in {"capacity", "conflict"}:
                 raise LabBusy("Lab occupied; finish the active attempt or wait for cleanup") from None
             raise LabDenied("Session unavailable") from None
-        except CandidateCommandError:
+        except (CandidateCommandError, EditRejected):
             raise
         except (LeaseUnavailable, ClusterUnavailable, ValueError, KeyError, TypeError):
             raise LabUnavailable("Lab temporarily unavailable") from None
@@ -146,6 +177,8 @@ class LabController:
     def _cleanup(self, cleanup):
         # The cluster driver checks namespace labels and UID, waits for deletion,
         # and independently verifies absence. Never confirm from an HTTP request.
+        if self.editors:
+            self.editors.close_lease(cleanup["ID"])
         self.cluster.cleanup(cleanup["ID"], cleanup["Namespace"])
         self.leases.confirm_cleanup(cleanup["ID"], cleanup["Namespace"])
         if self.current and self.current[1] == cleanup["ID"]:
@@ -158,6 +191,8 @@ class LabController:
             # grading or cleaning up. No health check ran: keep the last verdict.
             return None
         try:
+            if self.editors:
+                self.editors.reap()
             if not self.cluster.ready():
                 return False
             for cleanup in self.leases.pending():

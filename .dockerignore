@@ -1,0 +1,9 @@
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+.git
+.local
+.venv
+.env
+frontend/dist*
+frontend/*-captures

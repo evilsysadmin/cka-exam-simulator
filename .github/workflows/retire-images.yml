@@ -1,0 +1,24 @@
+name: Retire historical CKA cloud images (keep repository)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/retire-images.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  retire:
+    if: github.ref == 'refs/heads/main' && github.repository == 'evilsysadmin/cka-exam-simulator'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Delete only this repository's two former online runtime packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api repos/evilsysadmin/cka-exam-simulator/commits/main --jq .sha)" = "$GITHUB_SHA"
+          python3 scripts/retire_cloud_images.py

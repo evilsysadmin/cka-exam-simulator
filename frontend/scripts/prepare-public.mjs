@@ -20,6 +20,6 @@ console.log(labs ? 'RESTRICTED_LAB_STAGING_BUILD_OK' : 'PUBLIC_READONLY_PREVIEW_
 
 if(staging){
   const headers=new URL('_headers',dir)
-  writeFileSync(headers,readFileSync(headers,'utf8')+`\n/*\n  Content-Security-Policy: default-src 'self'; script-src 'self'; connect-src 'self' https://id-staging.shadowops.dpdns.org https://cka-api-staging.shadowops.dpdns.org${labs ? ' https://cka-labs-staging.shadowops.dpdns.org' : ''}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\n\n/\n  Cache-Control: no-store\n`)
+  writeFileSync(headers,readFileSync(headers,'utf8')+`\n/*\n  Content-Security-Policy: default-src 'self'; script-src 'self'; connect-src 'self' https://id-staging.shadowops.dpdns.org https://cka-api-staging.shadowops.dpdns.org${labs ? ' https://cka-labs-staging.shadowops.dpdns.org wss://cka-labs-staging.shadowops.dpdns.org' : ''}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\n\n/\n  Cache-Control: no-store\n`)
 }
 

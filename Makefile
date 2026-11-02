@@ -19,6 +19,7 @@ export OLLAMA_URL
 .PHONY: factory-plan factory-execute help ollama-up ollama-down ollama-pull ollama-status scenario-generate scenario-audit scenario-batch scenario-verify scenario-review-queue scenario-prepare-review scenario-pr-bundle scenario-smoke-all scenario-validate scenario-smoke scenario-check lab-up lab-down
 
 help:
+	@printf '%s\n' 'CKA LOCAL — Linux + Docker Compose + Python 3 + Make' '  make up       Build and start real labs at http://127.0.0.1:8042' '  make status   Inspect local app and owned cluster' '  make logs     Show application logs' '  make open     Open the local browser' '  make down     Stop app and remove only the owned local cluster' '  make update   Fast-forward clean checkout and rebuild (finish attempt first)'
 	@printf '%s\n' \
 	  'make ollama-up                            Local Ollama container (CPU by default)' \
 	  'make ollama-pull                          Pull OLLAMA_MODEL=$(OLLAMA_MODEL)' \
@@ -102,3 +103,7 @@ lab-up:
 
 lab-down:
 	$(PYTHON) -m cka_sim lab-down
+
+.PHONY: up status logs open down update
+up status logs open down update:
+	python3 scripts/local.py $@

@@ -9,7 +9,7 @@ export function ConfirmFinish({ cancel, confirm }: { cancel: () => void; confirm
     <p>Se eliminará el entorno del ejercicio y se liberará la plaza compartida. Esta acción no se puede deshacer.</p>
     <div className="dialog-actions">
       <button ref={cancelButton} type="button" className="button primary" autoFocus onClick={cancel}>Cancelar</button>
-      <button type="button" className="button ghost danger" onClick={confirm}>Sí, finalizar intento</button>
+      <button type="button" className="button ghost danger" tabIndex={-1} onKeyDown={event => { if (event.key==='Enter') { event.preventDefault(); event.stopPropagation() } }} onClick={confirm}>Sí, finalizar intento</button>
     </div>
   </dialog>
 }
