@@ -3,6 +3,7 @@ import json
 import subprocess
 import time
 import urllib.request
+import urllib.error
 
 URL='http://127.0.0.1:8042'
 def post(path, body, token=None):
@@ -11,8 +12,15 @@ def post(path, body, token=None):
     request=urllib.request.Request(URL+path,data=json.dumps(body,separators=(',',':')).encode(),headers=headers)
     with urllib.request.urlopen(request,timeout=90) as response:return json.load(response)
 def operation(action,body={}):
-    token=post('/api/local/token',{})['token']
-    return post('/api/labs/'+action,body,token)
+    deadline=time.monotonic()+15
+    while True:
+        token=post('/api/local/token',{})['token']
+        try:return post('/api/labs/'+action,body,token)
+        except urllib.error.HTTPError as error:
+            # The serialized controller intentionally returns 409 while its
+            # background reaper holds the actor lock. No operation ran.
+            if error.code!=409 or time.monotonic()>=deadline:raise
+            time.sleep(0.1)
 def main():
     cap=operation('capabilities')
     assert cap['capacity']==1 and cap['current'] is None
