@@ -1,5 +1,6 @@
 """Run against make up's real local API and dedicated cluster. No cloud access."""
 import json
+import subprocess
 import time
 import urllib.request
 
@@ -24,6 +25,9 @@ def main():
         attempt=operation('prepare',{'slug':scenario['slug']})
         identity=attempt['session']['id']
         try:
+            for action in ['up','down']:
+                blocked=subprocess.run(['make',action],capture_output=True,text=True,timeout=15)
+                assert blocked.returncode and 'Finish the active attempt' in blocked.stderr
             grade=operation('grade',{'id':identity})
             assert not grade['passed'],scenario['slug']
             operation('command',{'id':identity,'command':commands[scenario['slug']]})
@@ -36,4 +40,11 @@ def main():
         finally:operation('finish',{'id':identity})
     assert operation('capabilities')['current'] is None
     print('CKA_LOCAL_REAL_CLEANUP_OK')
+    # An unclean API exit must recover its journal and free the owned namespace;
+    # it must not leave make up permanently blocked by an offline attempt.
+    attempt=operation('prepare',{'slug':'fix-catalog-service'})
+    subprocess.run(['docker','kill','cka-local-app-1'],check=True)
+    subprocess.run(['make','up'],check=True)
+    assert operation('capabilities')['current'] is None
+    print('CKA_LOCAL_CRASH_RECOVERY_OK')
 if __name__=='__main__':main()

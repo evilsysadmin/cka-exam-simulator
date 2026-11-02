@@ -20,7 +20,7 @@ make down     # finalizar primero el intento; elimina solo el clúster propio
 make update   # checkout limpio, git pull --ff-only y reconstrucción
 ```
 
-La sesión se conserva al recargar el navegador. Un reinicio de la aplicación invalida el nonce local, recupera el diario y limpia los intentos anteriores. `make up`, `down` y `update` rechazan un intento pendiente: finalízalo desde la web antes. Los datos y la herramienta kind verificada se guardan en `.local/local/`, ignorado por Git. La red Docker permite las descargas de arranque; no publica servicios de los ejercicios. No compartas el directorio ni publiques los puertos mediante un proxy o túnel.
+La sesión se conserva al recargar el navegador. Un reinicio de la aplicación invalida el nonce local, recupera el diario y limpia los intentos anteriores. `make up`, `down` y `update` rechazan un intento pendiente mientras la aplicación está activa: finalízalo desde la web antes. Si la aplicación se cerró de forma inesperada, `make up` recupera el diario y limpia el intento interrumpido antes de abrir una nueva plaza. Los datos y la herramienta kind verificada se guardan en `.local/local/`, ignorado por Git. La red Docker permite las descargas de arranque; no publica servicios de los ejercicios. No compartas el directorio ni publiques los puertos mediante un proxy o túnel.
 
 Para desarrollar: `npm --prefix frontend run build:local`; la CI ejecuta `make up`, resuelve los tres labs contra Kubernetes real y comprueba nano y la web sin llamadas a dominios externos.
 

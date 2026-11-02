@@ -86,6 +86,17 @@ def owned_node(env):
         raise ValueError('Cluster identity changed; refusing mutation')
     return True
 
+def app_running(env):
+    ids=call(['docker','ps','-aq','--filter','label=com.docker.compose.project=cka-local',
+              '--filter','label=com.docker.compose.service=app'],output=True,env=env).splitlines()
+    if not ids:return False
+    if len(ids)!=1:raise ValueError('Ambiguous local app')
+    info=json.loads(call(['docker','inspect',ids[0]],output=True,env=env))[0]
+    labels=info['Config'].get('Labels') or {}
+    if labels.get('com.docker.compose.project.working_dir')!=str(ROOT) or not info['Config']['Image'].startswith('cka-local-app:'):
+        raise ValueError('Refusing to operate another checkout local app')
+    return info['State']['Running'] is True
+
 def idle():
     path=STATE/'state/journal/leases.json'
     if path.exists():
@@ -116,6 +127,7 @@ def main(action):
         if action=='open':webbrowser.open(URL);return
         call(['docker','info','--format','{{.OSType}}'],env=env,output=True)
         call(['docker','compose','version'],env=env,output=True)
+        running=app_running(env)
         if action=='logs':compose(env,'logs','--tail','100','app');return
         if action=='status':
             print('cluster_owned='+str(owned_node(env)).lower())
@@ -134,7 +146,7 @@ def main(action):
             (STATE/'owner.json').unlink(missing_ok=True)
             print('CKA_LOCAL_STOPPED');return
         if action not in {'up','update'}:raise ValueError('Use up|update|status|logs|open|down')
-        idle()
+        if running or action=='update':idle()
         if action=='update':
             if call(['git','status','--porcelain'],output=True):raise ValueError('Commit or stash local changes before make update')
             call(['git','pull','--ff-only'])
@@ -197,6 +209,7 @@ def main(action):
         compose(env,'build','app')
         # Real GNU nano confinement is checked before starting the local app.
         compose(env,'run','--rm','--no-deps','--entrypoint','python','app','-c','from cka_sim.nano_sandbox import probe; probe()')
+        if app_running(env):idle() # recheck after the potentially long build
         (STATE/'build').write_text(env['CKA_LOCAL_BUILD'])
         compose(env,'up','-d','--wait','--wait-timeout','120','app')
         print('CKA_LOCAL_READY '+URL)
