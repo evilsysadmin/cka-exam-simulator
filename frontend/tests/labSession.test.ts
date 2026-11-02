@@ -48,3 +48,18 @@ test('parallel operations and nonstaging origins are rejected', async () => {
   await assert.rejects(client.request('prepare', {slug:'scale-payment-api'}))
   client.dispose(); resolve(json({},401)); await assert.rejects(pending)
 })
+
+test('local mode exchanges only an in-memory nonce at the same origin and omits cookies', async () => {
+  const calls: [string, RequestInit | undefined][] = []
+  const fetcher = (async (url: string | URL | Request, options?: RequestInit) => {
+    calls.push([String(url), options])
+    return new Response(JSON.stringify(calls.length === 1 ? {token:'local-nonce'} : {labs_enabled:true}), {status:200})
+  }) as typeof fetch
+  const client = new LabSession(fetcher,'http://127.0.0.1:8042',true)
+  await client.request('capabilities')
+  assert.deepEqual(calls.map(x=>x[0]),['/api/local/token','/api/labs/capabilities'])
+  assert.ok(calls.every(x=>x[1]?.credentials==='omit'))
+  assert.equal((calls[1][1]?.headers as Record<string,string>).Authorization,'Bearer local-nonce')
+  client.dispose()
+  assert.throws(()=>new LabSession(fetcher,'http://evil.example:8042',true))
+})
