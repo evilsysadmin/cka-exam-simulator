@@ -1,2 +1,3 @@
 -r account-requirements.txt
 PyYAML==6.0.3
+wsproto==1.3.2

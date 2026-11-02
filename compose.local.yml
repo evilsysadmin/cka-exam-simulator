@@ -1,0 +1,28 @@
+# Linux workstation only. No Docker socket, cloud secret or ambient kubeconfig.
+name: cka-local
+services:
+  app:
+    image: cka-local-app:${CKA_LOCAL_BUILD:?Use make up}
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.local
+      args:
+        SOURCE_SHA: ${CKA_LOCAL_BUILD:?Use make up}
+    user: "${CKA_LOCAL_UID:?Use make up}:${CKA_LOCAL_GID:?Use make up}"
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 96
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    volumes:
+      - ./.local/local/kubeconfig:/run/secrets/cka-lab-admin.yaml:ro
+      - ./.local/local/state:/state:rw
+    restart: "no"
+    logging:
+      driver: local
+      options: {max-size: 5m, max-file: '2'}

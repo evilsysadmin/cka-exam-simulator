@@ -2,13 +2,16 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import type { EditorIO } from './editorTransport'
 
-type Props = { onCommand: (command: string) => Promise<string>; scenario: string; staging?: boolean }
+type Props = { onCommand: (command: string) => Promise<string>; scenario: string; staging?: boolean; onEdit?: (command: string, io: EditorIO) => Promise<string> }
 
-export default function TerminalPanel({ onCommand, scenario, staging = false }: Props) {
+export default function TerminalPanel({ onCommand, onEdit, scenario, staging = false }: Props) {
   const mount = useRef<HTMLDivElement | null>(null)
   const onCommandRef = useRef(onCommand)
   onCommandRef.current = onCommand
+  const onEditRef = useRef(onEdit)
+  onEditRef.current = onEdit
 
   useEffect(() => {
     const root = mount.current
@@ -34,6 +37,16 @@ export default function TerminalPanel({ onCommand, scenario, staging = false }: 
     const observer = new ResizeObserver(resize)
     observer.observe(root)
 
+    let editorInput: ((value: string) => void) | null = null
+    let editorResize: (() => void) | null = null
+    const editorSize = terminal.onResize(() => editorResize?.())
+    terminal.attachCustomKeyEventHandler(event => { if (editorInput && (event.ctrlKey || event.key==='Tab')) event.preventDefault(); return true })
+    const editorIO: EditorIO = {
+      write: value => terminal.write(value),
+      size: () => ({columns:terminal.cols,rows:terminal.rows}),
+      input: handler => { editorInput=handler; root.dataset.editorActive='true'; return () => { editorInput=null; delete root.dataset.editorActive } },
+      resize: handler => { editorResize=handler; return () => { editorResize=null } },
+    }
     let input = ''
     let busy = false
     let disposed = false
@@ -69,14 +82,15 @@ export default function TerminalPanel({ onCommand, scenario, staging = false }: 
     }
     terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  ' + (staging ? 'STAGING' : 'LOCAL PREVIEW'))
     terminal.writeln('Scenario: ' + scenario)
-    terminal.writeln('Allowed: kubectl get / describe / scale / patch / rollout / explain / set resources')
+    terminal.writeln(staging ? 'kubectl o k · kubectl edit con nano · filtra la salida con | grep' : 'Allowed: kubectl get / describe / scale / patch / rollout / explain / set resources')
     terminal.writeln(staging ? 'Prueba: kubectl get pods' : 'Try: kubectl get pods -A')
     prompt()
 
     const handle = async (line: string) => {
       busy = true
       try {
-        const output = await onCommandRef.current(line)
+        const output = onEditRef.current && /^(?:k(?:ubectl)?\s+edit(?:\s|$)|nano(?:\s|$))/.test(line)
+          ? await onEditRef.current(line,editorIO) : await onCommandRef.current(line)
         if (!disposed) terminal.writeln('\r\n' + output.replace(/\n/g, '\r\n'))
       } catch (error) {
         if (!disposed) terminal.writeln('\r\n\x1b[31m' +
@@ -87,6 +101,7 @@ export default function TerminalPanel({ onCommand, scenario, staging = false }: 
     }
 
     const subscription = terminal.onData((chunk) => {
+      if (editorInput) { editorInput(chunk); return }
       if (busy) return
       for (const key of chunk) {
         // xterm sends cursor keys as escape sequences, sometimes split across
@@ -136,6 +151,7 @@ export default function TerminalPanel({ onCommand, scenario, staging = false }: 
     return () => {
       disposed = true
       subscription.dispose()
+      editorSize.dispose()
       observer.disconnect()
       window.removeEventListener('resize', resize)
       terminal.dispose()

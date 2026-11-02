@@ -11,3 +11,7 @@ scenarios/generated/
 frontend/dist-public/
 frontend/dist-account-staging/
 frontend/account-captures/
+
+frontend/dist-local/
+frontend/dist-lab-staging/
+frontend/lab-captures/

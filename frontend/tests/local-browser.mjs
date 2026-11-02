@@ -1,0 +1,31 @@
+import { chromium } from 'playwright'
+import assert from 'node:assert/strict'
+const browser=await chromium.launch({headless:true})
+const page=await browser.newPage({viewport:{width:1440,height:1000}})
+const foreign=[]
+page.on('request',request=>{if(new URL(request.url()).origin!=='http://127.0.0.1:8042')foreign.push(request.url())})
+try {
+  await page.goto('http://127.0.0.1:8042')
+  await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).click()
+  const finish=page.getByRole('button',{name:'Finalizar intento',exact:true})
+  await finish.waitFor()
+  assert.equal(await finish.getAttribute('tabindex'),'-1')
+  await finish.focus();await page.keyboard.press('Enter')
+  assert.equal(await page.locator('dialog[open]').count(),0)
+  await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
+  const input=page.locator('.xterm-helper-textarea')
+  await input.focus();await page.keyboard.type('k edit svc/catalog-api-svc');await page.keyboard.press('Enter')
+  await page.locator('[data-editor-active="true"]').waitFor()
+  await page.waitForFunction(()=>document.querySelector('.terminal-screen')?.textContent?.includes('GNU nano'))
+  await input.focus();await page.keyboard.press('Control+x')
+  await page.locator('[data-editor-active="true"]').waitFor({state:'hidden'})
+  await page.getByRole('button',{name:'Restaurar terminal',exact:true}).click()
+  await finish.click()
+  const confirm=page.getByRole('button',{name:'Sí, finalizar intento',exact:true})
+  await confirm.focus();await page.keyboard.press('Enter')
+  assert.equal(await page.locator('dialog[open]').count(),1)
+  await confirm.click()
+  await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).waitFor()
+  assert.deepEqual(foreign,[])
+  console.log('CKA_LOCAL_BROWSER_REAL_NANO_NO_CLOUD_OK')
+} finally {await browser.close()}
