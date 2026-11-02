@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -142,6 +143,21 @@ def main(action):
         binary=kind(env)
         network(env)
         present=owned_node(env)
+        # kind's entrypoint needs a host DNS address even on an internal bridge
+        # (there is intentionally no default route). Scope the shim to its exact
+        # pinned node creation; it never grants authority to the application.
+        info=json.loads(call(['docker','network','inspect',NETWORK],env=env,output=True))[0]
+        gateway=next((v.get('Gateway') for v in info['IPAM']['Config'] if v.get('Gateway') and ':' not in v['Gateway']),None)
+        if gateway is None or not ipaddress.ip_address(gateway).is_private:raise ValueError('Private bridge gateway required')
+        shim=STATE/'shim';shim.mkdir(mode=0o700,exist_ok=True)
+        real_docker=shutil.which('docker',path=env['PATH'])
+        wrapper=shim/'docker'
+        wrapper.write_text('#!'+sys.executable+'\nimport os,sys\nargs=sys.argv[1:]\n'
+            +"if args and args[0]=='run' and args[-1]=="+repr(NODE_IMAGE)+":\n"
+            +" args[1:1]="+repr(['--add-host=host.docker.internal:'+gateway,'--label=org.shadowops.cka=local'])+"\n"
+            +'os.execv('+repr(real_docker)+',['+repr(real_docker)+',*args])\n')
+        wrapper.chmod(0o700)
+        kind_env={**env,'PATH':str(shim)+os.pathsep+env['PATH']}
         if not present:
             # Reserve all but one advertised CPU, even on large workstations,
             # so the excessive-CPU scenario starts Pending on every machine.
@@ -150,7 +166,7 @@ def main(action):
             config=STATE/'kind.yaml'
             config.write_text('kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnetworking:\n  apiServerAddress: 127.0.0.1\nnodes:\n- role: control-plane\n  kubeadmConfigPatches:\n  - |\n    kind: KubeletConfiguration\n    kubeReserved:\n      cpu: "'+str(cpus-1)+'"\n')
             try:
-                call([binary,'create','cluster','--name',CLUSTER,'--image',NODE_IMAGE,'--config',str(config),'--kubeconfig',str(STATE/'kubeconfig'),'--wait','180s','--retain'],env=env)
+                call([binary,'create','cluster','--name',CLUSTER,'--image',NODE_IMAGE,'--config',str(config),'--kubeconfig',str(STATE/'kubeconfig'),'--wait','180s','--retain'],env=kind_env)
             except subprocess.SubprocessError:
                 ids=nodes(env)
                 if len(ids)==1:

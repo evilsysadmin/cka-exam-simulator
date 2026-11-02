@@ -200,7 +200,7 @@ export function PilotLabs({ onEditingChange, local = false }: { onEditingChange?
           <button type="button" className="terminal-size" onClick={() => setObjectiveOpen(false)}>Cerrar objetivo</button>
         </aside>}
       </div>}
-      <div className="console-area">{active ? <TerminalPanel key={attempt!.session.id} staging scenario={current.slug} onCommand={command} onEdit={edit}/>
+      <div className="console-area">{active ? <TerminalPanel key={attempt!.session.id} local={local} staging scenario={current.slug} onCommand={command} onEdit={edit}/>
         : <div className="console-empty"><span className="console-placeholder">&gt;_</span>
           <strong>{attempt ? 'El intento está terminando' : occupied ? 'El laboratorio está ocupado' : 'Prepara el ejercicio para empezar'}</strong>
           <small>{attempt ? 'Puedes finalizarlo y comprobar de nuevo el acceso cuando termine la limpieza.' : occupied
