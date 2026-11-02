@@ -9,7 +9,7 @@ make open
 
 Necesitas Docker Engine con Compose v2, Python 3 y Make, como usuario normal con acceso al socket local de Docker. Compatible con Linux amd64 y arm64, kernel con Landlock ABI 3 (por ejemplo Ubuntu 24.04), al menos 2 CPU y 4 GiB disponibles para Docker. No requiere instalar Python, Node, Go, kubectl o nano globalmente: la aplicación se construye en contenedor. La primera ejecución descarga herramientas e imágenes gratuitas; no crea recursos cloud ni requiere cuenta, token, Ollama o inferencia.
 
-Abre **http://127.0.0.1:8042**. Hay tres ejercicios reales de Kubernetes, una plaza, evaluación del estado real, caducidad y limpieza de cada intento. El clúster `cka-local` y su red interna son exclusivos de esta copia; nunca se usa tu kubeconfig habitual. La API de Kubernetes y la web escuchan en loopback. El contenedor de la aplicación no recibe el socket Docker ni credenciales cloud.
+Abre **http://127.0.0.1:8042**. Hay tres ejercicios reales de Kubernetes, una plaza, evaluación del estado real, caducidad y limpieza de cada intento. El clúster `cka-local` y su red Docker dedicada son exclusivos de esta copia; nunca se usa tu kubeconfig habitual. La API de Kubernetes y la web escuchan en loopback. El contenedor de la aplicación no recibe el socket Docker ni credenciales cloud.
 
 La terminal admite `kubectl`, `k`, lecturas con `| grep`, y `kubectl edit svc/nombre` o `kubectl edit deploy/nombre` con GNU nano real. Nano usa Ctrl+O, Enter y Ctrl+X; los cambios se validan antes de aplicarlos. Puedes maximizar la terminal y consultar el objetivo en el lateral. Finalizar queda fuera del tabulado y Enter nunca lo activa; requiere confirmación explícita. Un aviso permite recargar cuando cambia la versión y se bloquea durante la edición.
 
@@ -20,7 +20,7 @@ make down     # finalizar primero el intento; elimina solo el clúster propio
 make update   # checkout limpio, git pull --ff-only y reconstrucción
 ```
 
-La sesión se conserva al recargar el navegador. Un reinicio de la aplicación invalida el nonce local, recupera el diario y limpia los intentos anteriores. `make up`, `down` y `update` rechazan un intento pendiente: finalízalo desde la web antes. Los datos y la herramienta kind verificada se guardan en `.local/local/`, ignorado por Git. No compartas el directorio ni publiques los puertos mediante un proxy o túnel.
+La sesión se conserva al recargar el navegador. Un reinicio de la aplicación invalida el nonce local, recupera el diario y limpia los intentos anteriores. `make up`, `down` y `update` rechazan un intento pendiente: finalízalo desde la web antes. Los datos y la herramienta kind verificada se guardan en `.local/local/`, ignorado por Git. La red Docker permite las descargas de arranque; no publica servicios de los ejercicios. No compartas el directorio ni publiques los puertos mediante un proxy o túnel.
 
 Para desarrollar: `npm --prefix frontend run build:local`; la CI ejecuta `make up`, resuelve los tres labs contra Kubernetes real y comprueba nano y la web sin llamadas a dominios externos.
 

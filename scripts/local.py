@@ -96,10 +96,10 @@ def idle():
 def network(env):
     ids=call(['docker','network','ls','-q','--filter','name=^'+NETWORK+'$'],env=env,output=True).splitlines()
     if not ids:
-        call(['docker','network','create','--internal','--label','org.shadowops.cka=local',NETWORK],env=env)
+        call(['docker','network','create','--label','org.shadowops.cka=local',NETWORK],env=env)
     else:
         value=json.loads(call(['docker','network','inspect',NETWORK],env=env,output=True))[0]
-        if value.get('Labels',{}).get('org.shadowops.cka')!='local' or not value.get('Internal'):
+        if value.get('Labels',{}).get('org.shadowops.cka')!='local' or value.get('Internal'):
             raise ValueError('Refusing to adopt a foreign Docker network')
 
 def main(action):
