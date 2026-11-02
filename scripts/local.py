@@ -149,7 +149,16 @@ def main(action):
             if cpus<2:raise ValueError('Docker needs at least two CPUs and 4 GiB memory')
             config=STATE/'kind.yaml'
             config.write_text('kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnetworking:\n  apiServerAddress: 127.0.0.1\nnodes:\n- role: control-plane\n  kubeadmConfigPatches:\n  - |\n    kind: KubeletConfiguration\n    kubeReserved:\n      cpu: "'+str(cpus-1)+'"\n')
-            call([binary,'create','cluster','--name',CLUSTER,'--image',NODE_IMAGE,'--config',str(config),'--kubeconfig',str(STATE/'kubeconfig'),'--wait','180s'],env=env)
+            try:
+                call([binary,'create','cluster','--name',CLUSTER,'--image',NODE_IMAGE,'--config',str(config),'--kubeconfig',str(STATE/'kubeconfig'),'--wait','180s','--retain'],env=env)
+            except subprocess.SubprocessError:
+                ids=nodes(env)
+                if len(ids)==1:
+                    info=json.loads(call(['docker','inspect',ids[0]],env=env,output=True))[0]
+                    if info['Name']=='/'+NODE and info['Config']['Image']==NODE_IMAGE and set(info['NetworkSettings']['Networks'])=={NETWORK}:
+                        (STATE/'owner.json').write_text(json.dumps({'node_id':info['Id']}))
+                        if os.environ.get('GITHUB_ACTIONS')=='true':call(['docker','logs','--tail','100',NODE],env=env)
+                raise
             ids=nodes(env)
             if len(ids)!=1:raise ValueError('Expected one dedicated node')
             info=json.loads(call(['docker','inspect',ids[0]],env=env,output=True))[0]

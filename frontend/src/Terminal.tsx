@@ -4,9 +4,9 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { EditorIO } from './editorTransport'
 
-type Props = { onCommand: (command: string) => Promise<string>; scenario: string; staging?: boolean; onEdit?: (command: string, io: EditorIO) => Promise<string> }
+type Props = { onCommand: (command: string) => Promise<string>; scenario: string; staging?: boolean; local?: boolean; onEdit?: (command: string, io: EditorIO) => Promise<string> }
 
-export default function TerminalPanel({ onCommand, onEdit, scenario, staging = false }: Props) {
+export default function TerminalPanel({ onCommand, onEdit, scenario, staging = false, local = false }: Props) {
   const mount = useRef<HTMLDivElement | null>(null)
   const onCommandRef = useRef(onCommand)
   onCommandRef.current = onCommand
@@ -80,7 +80,7 @@ export default function TerminalPanel({ onCommand, onEdit, scenario, staging = f
         } else replaceInput(history[historyIndex])
       }
     }
-    terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  ' + (staging ? 'STAGING' : 'LOCAL PREVIEW'))
+    terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  ' + (local ? 'LOCAL' : staging ? 'STAGING' : 'LOCAL PREVIEW'))
     terminal.writeln('Scenario: ' + scenario)
     terminal.writeln(staging ? 'kubectl o k · kubectl edit con nano · filtra la salida con | grep' : 'Allowed: kubectl get / describe / scale / patch / rollout / explain / set resources')
     terminal.writeln(staging ? 'Prueba: kubectl get pods' : 'Try: kubectl get pods -A')
@@ -156,7 +156,7 @@ export default function TerminalPanel({ onCommand, onEdit, scenario, staging = f
       window.removeEventListener('resize', resize)
       terminal.dispose()
     }
-  }, [scenario, staging])
+  }, [scenario, staging, local])
 
   return <div ref={mount} className="terminal-screen" aria-label={staging ? 'Terminal Kubernetes' : 'Terminal Kubernetes local'} />
 }

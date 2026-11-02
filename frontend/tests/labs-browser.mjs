@@ -192,6 +192,7 @@ try{
         assert.equal(await page.getByRole('button',{name:'Recargar',exact:true}).isDisabled(),true)
         assert.equal(await page.getByRole('button',{name:'Finalizar intento',exact:true}).isDisabled(),true)
         await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
+        for(let wait=0;wait<100 && !editorResizes;wait++) await new Promise(resolve=>setTimeout(resolve,50))
         await input.focus();await page.keyboard.press('Tab');await page.keyboard.press('Control+o');await page.keyboard.press('Enter');await page.keyboard.press('Control+x')
         await page.locator('.terminal-screen[data-editor-active="true"]').waitFor({state:'hidden'})
         await page.getByRole('button',{name:'Restaurar terminal',exact:true}).click()
