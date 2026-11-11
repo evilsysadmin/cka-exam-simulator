@@ -11,6 +11,8 @@ jobs:
   go-scenario-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      GOTOOLCHAIN: local
     defaults:
       run:
         working-directory: go
@@ -20,8 +22,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go/go.mod
+          go-version: '1.27.4'
           cache-dependency-path: go/go.mod
+      - name: Verify patched Go toolchain
+        run: test "$(go env GOVERSION)" = go1.27.4
       - name: Verify checked-in client-go dependency lock and checksums
         run: |
           set -euo pipefail

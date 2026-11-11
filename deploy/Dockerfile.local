@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS journal
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine AS journal
 ARG TARGETOS
 ARG TARGETARCH
 ENV GOTOOLCHAIN=local
@@ -6,7 +6,7 @@ WORKDIR /src
 COPY go/go.mod go/go.sum ./
 RUN go mod download && go mod verify
 COPY go/ ./
-RUN test "$(go env GOVERSION)" = go1.27.3 && \
+RUN test "$(go env GOVERSION)" = go1.27.4 && \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' \
     -o /out/cka-lease-stdio ./cmd/cka-lease-stdio
 
