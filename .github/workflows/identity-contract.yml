@@ -27,6 +27,8 @@ jobs:
     name: Pinned Identity Go JWKS + ephemeral JWT → CKA Python verifier
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    env:
+      GOTOOLCHAIN: local
     steps:
       - name: Checkout CKA consumer
         uses: actions/checkout@v4
@@ -39,8 +41,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.4'
           cache: false
+      - name: Verify exact patched Go toolchain
+        run: test "$(go env GOVERSION)" = go1.27.4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
