@@ -6,6 +6,12 @@ on:
 permissions:
   contents: read
 
+# Cancel obsolete PR revisions before they spin up another disposable kind cluster.
+# Never cancel CI for an admitted main SHA.
+concurrency:
+  group: cka-ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   scenario-core:
     runs-on: ubuntu-latest
