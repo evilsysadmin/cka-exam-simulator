@@ -5,6 +5,13 @@ on:
     branches: [main]
 permissions:
   contents: read
+
+# Avoid rebuilding Docker/owned kind for superseded revisions of the same PR.
+# Every admitted main SHA must complete its own real local workstation gate.
+concurrency:
+  group: cka-local-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   playable:
     runs-on: ubuntu-24.04
