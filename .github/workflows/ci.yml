@@ -156,8 +156,11 @@ jobs:
       - name: Real staging lab UI at desktop and touch sizes (synthetic HTTP services)
         working-directory: frontend
         run: npm run test:labs-browser
+      # Local-only project: PRs need real desktop/touch captures for review,
+      # and failing main checks need diagnostics. Healthy main has no consumer
+      # for another copy of the 3.5 MB browser screenshot archive.
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && (github.event_name == 'pull_request' || failure()) }}
         with:
           name: cka-account-ui-${{ github.sha }}
           path: |
