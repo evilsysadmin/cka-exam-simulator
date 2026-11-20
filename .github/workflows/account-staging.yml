@@ -8,6 +8,12 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+
+# PR revisions supersede prior checks; preserve every main SHA and every
+# manual dispatch as an independently validated immutable run.
+concurrency:
+  group: cka-account-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   account:
     name: Isolated account API and pinned runtime

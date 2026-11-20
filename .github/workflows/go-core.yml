@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# PR revisions supersede prior checks; preserve every main SHA and every
+# manual dispatch as an independently validated immutable run.
+concurrency:
+  group: cka-go-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   go-scenario-contract:
     runs-on: ubuntu-24.04
