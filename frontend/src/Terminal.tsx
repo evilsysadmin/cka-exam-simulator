@@ -3,10 +3,11 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { EditorIO } from './editorTransport'
+import { CKA_TERMINAL, terminalPrompt, terminalPromptWidth, terminalWelcome, type TerminalPresentation } from './terminalPresentation'
 
-type Props = { onCommand: (command: string) => Promise<string>; scenario: string; staging?: boolean; local?: boolean; onEdit?: (command: string, io: EditorIO) => Promise<string> }
+type Props = { onCommand: (command: string) => Promise<string>; scenario: string; staging?: boolean; local?: boolean; onEdit?: (command: string, io: EditorIO) => Promise<string>; presentation?: TerminalPresentation }
 
-export default function TerminalPanel({ onCommand, onEdit, scenario, staging = false, local = false }: Props) {
+export default function TerminalPanel({ onCommand, onEdit, scenario, staging = false, local = false, presentation = CKA_TERMINAL }: Props) {
   const mount = useRef<HTMLDivElement | null>(null)
   const onCommandRef = useRef(onCommand)
   onCommandRef.current = onCommand
@@ -54,12 +55,12 @@ export default function TerminalPanel({ onCommand, onEdit, scenario, staging = f
     const history: string[] = []
     let historyIndex = -1
     let draft = ''
-    const promptText = '\x1b[32mcka@lab\x1b[0m:\x1b[34m~\x1b[0m$ '
+    const promptText = terminalPrompt(presentation)
     const prompt = () => terminal.write('\r\n' + promptText)
     // Repaint only the pending command, including its wrapped physical rows.
     // Do not clear the xterm buffer: previous output is valuable during an exam.
     const replaceInput = (next: string) => {
-      const rows = Math.floor((11 + input.length - 1) / Math.max(1, terminal.cols))
+      const rows = Math.floor((terminalPromptWidth(presentation) + input.length - 1) / Math.max(1, terminal.cols))
       let erase = '\r\x1b[2K'
       for (let row = 0; row < rows; row++) erase += '\x1b[1A\r\x1b[2K'
       terminal.write(erase + '\x1b[0J' + promptText + next)
@@ -80,10 +81,7 @@ export default function TerminalPanel({ onCommand, onEdit, scenario, staging = f
         } else replaceInput(history[historyIndex])
       }
     }
-    terminal.writeln('\x1b[1mCKA // LAB\x1b[0m  |  ' + (local ? 'LOCAL' : staging ? 'STAGING' : 'LOCAL PREVIEW'))
-    terminal.writeln('Scenario: ' + scenario)
-    terminal.writeln(staging ? 'kubectl o k · kubectl edit con nano · filtra la salida con | grep' : 'Allowed: kubectl get / describe / scale / patch / rollout / explain / set resources')
-    terminal.writeln(staging ? 'Prueba: kubectl get pods' : 'Try: kubectl get pods -A')
+    for (const line of terminalWelcome(presentation, scenario, { local, staging })) terminal.writeln(line)
     prompt()
 
     const handle = async (line: string) => {
@@ -156,7 +154,7 @@ export default function TerminalPanel({ onCommand, onEdit, scenario, staging = f
       window.removeEventListener('resize', resize)
       terminal.dispose()
     }
-  }, [scenario, staging, local])
+  }, [scenario, staging, local, presentation])
 
-  return <div ref={mount} className="terminal-screen" aria-label={staging ? 'Terminal Kubernetes' : 'Terminal Kubernetes local'} />
+  return <div ref={mount} className="terminal-screen" aria-label={staging ? presentation.ariaLabel : presentation.ariaLabel + ' local'} />
 }
