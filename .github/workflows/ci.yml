@@ -181,7 +181,7 @@ jobs:
       - name: Install scenario engine
         run: python -m pip install -e '.[dev]'
       - name: Install pinned kind and kubectl without creating a cluster
-        uses: helm/kind-action@v1.14.0
+        uses: helm/kind-action@v1.15.2
         with:
           install_only: true
           version: v0.31.0
