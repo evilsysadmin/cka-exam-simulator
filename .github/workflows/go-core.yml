@@ -42,25 +42,6 @@ jobs:
         run: go test -race -count=1 ./...
       - name: Static Go analysis
         run: go vet ./...
-      - name: Generate patched Go module lock for review (temporary)
-        run: |
-          set -euo pipefail
-          go get golang.org/x/net@v0.63.0
-          go mod tidy
-          go mod verify
-          git diff -- go.mod go.sum
-      - name: Export regenerated lock for reviewed source commit (temporary)
-        uses: actions/upload-artifact@v7
-        with:
-          name: cka-go-lock-review-${{ github.sha }}
-          path: |
-            go/go.mod
-            go/go.sum
-          if-no-files-found: error
-      - name: Block admission until reviewed Go lock is committed (temporary)
-        run: |
-          echo "Upgrade must be committed to go.mod and go.sum before the security gate can pass"
-          exit 1
       - name: Install pinned Go vulnerability analyzer
         # Keep the scanner version deterministic; the public vulnerability
         # database is intentionally refreshed independently of source commits.
