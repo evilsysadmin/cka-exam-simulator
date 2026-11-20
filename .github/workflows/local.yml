@@ -22,7 +22,7 @@ jobs:
         run: make up
       - name: Real Kubernetes ownership, solve, grade and cleanup
         run: python3 scripts/check_local.py
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Local browser against the actual API
