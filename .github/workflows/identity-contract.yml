@@ -31,9 +31,9 @@ jobs:
       GOTOOLCHAIN: local
     steps:
       - name: Checkout CKA consumer
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Checkout known reviewed Identity core, not moving main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: evilsysadmin/shadowops-infra
           ref: 41e26d71a9ee5f0a2399fbd999f55ea81cc60648
