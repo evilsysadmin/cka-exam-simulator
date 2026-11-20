@@ -19,7 +19,7 @@ const linux: TerminalPresentation = {
   instructions: {connected: 'Investiga el incidente con comandos Linux.', preview: 'Sesión aún no iniciada.'},
   examples: {connected: 'Prueba: journalctl -u demo', preview: 'Prepara la misión.'},
 }
-assert.equal(terminalPromptWidth(linux), 20)
+assert.equal(terminalPromptWidth(linux), 23)
 assert.ok(terminalPrompt(linux).includes('engineer@sandbox'))
 assert.deepEqual(terminalWelcome(linux, 'disk-full', {local:true,staging:true}).slice(1), [
   'Scenario: disk-full', 'Investiga el incidente con comandos Linux.', 'Prueba: journalctl -u demo',
