@@ -39,7 +39,7 @@ jobs:
           ref: 41e26d71a9ee5f0a2399fbd999f55ea81cc60648
           path: .identity-contract-ref
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.4'
           cache: false
