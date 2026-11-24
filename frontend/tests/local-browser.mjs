@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 const browser=await chromium.launch({headless:true})
 const page=await browser.newPage({viewport:{width:1440,height:1000}})
 const foreign=[]
+const editorOpenStatuses=[]
 page.on('request',request=>{if(new URL(request.url()).origin!=='http://127.0.0.1:8042')foreign.push(request.url())})
+page.on('response',response=>{
+  if(new URL(response.url()).pathname==='/api/labs/edit-open')editorOpenStatuses.push(response.status())
+})
 try {
   await page.goto('http://127.0.0.1:8042')
   // The edit exercise is explicit: do not depend on catalog ordering.
@@ -14,6 +18,9 @@ try {
   assert.equal(await finish.getAttribute('tabindex'),'-1')
   await finish.focus();await page.keyboard.press('Enter')
   assert.equal(await page.locator('dialog[open]').count(),0)
+  // The attempt may be visible before prepare() releases the busy guard.
+  // Wait while the action bar is visible: maximizing hides it by design.
+  await page.locator('.action-left').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
   await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
   const input=page.locator('.terminal-screen .xterm-helper-textarea')
   // Wait for xterm's prompt and real keyboard focus, not merely the outer
@@ -22,9 +29,10 @@ try {
   await page.waitForFunction(() => document.querySelector('.terminal-screen .xterm-rows')?.textContent?.includes('cka@lab'))
   await input.focus()
   assert.equal(await input.evaluate(el => document.activeElement === el), true)
-  // A single text insertion is less vulnerable to per-key focus changes than
-  // many synthetic keydown/keyup events; Enter still executes the real prompt.
-  await page.keyboard.insertText('k edit svc/catalog-api-svc')
+  // Real keyboard path (not synthetic insertText). Wait on the app's
+  // observable busy/active state, not the internal xterm DOM renderer:
+  // terminal rows can be reflowed/recycled without matching literal text.
+  await page.keyboard.type('k edit svc/catalog-api-svc',{delay:5})
   await input.press('Enter')
   try {
     await page.locator('[data-editor-active="true"]').waitFor()
@@ -34,6 +42,7 @@ try {
       terminalVisible: Boolean(document.querySelector('.terminal-screen .xterm-rows')),
       keyboardFocused: document.activeElement?.classList.contains('xterm-helper-textarea') === true,
       editorActive: Boolean(document.querySelector('[data-editor-active="true"]')),
+      editOpenStatuses,
       labBusy: document.querySelector('.action-left')?.textContent?.includes('Editando con nano') === true,
       hasUiError: Boolean(document.querySelector('.lab .error')),
     }))
