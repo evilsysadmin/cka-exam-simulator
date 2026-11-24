@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 const browser=await chromium.launch({headless:true})
 const page=await browser.newPage({viewport:{width:1440,height:1000}})
 const foreign=[]
+const editorOpenStatuses=[]
 page.on('request',request=>{if(new URL(request.url()).origin!=='http://127.0.0.1:8042')foreign.push(request.url())})
+page.on('response',response=>{
+  if(new URL(response.url()).pathname==='/api/labs/edit-open')editorOpenStatuses.push(response.status())
+})
 try {
   await page.goto('http://127.0.0.1:8042')
   // The edit exercise is explicit: do not depend on catalog ordering.
@@ -15,6 +19,9 @@ try {
   await finish.focus();await page.keyboard.press('Enter')
   assert.equal(await page.locator('dialog[open]').count(),0)
   await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
+  // The attempt may be visible before the asynchronous prepare() finally
+  // releases the app-level busy guard. Never type while it is still busy.
+  await page.locator('.action-left').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
   const input=page.locator('.terminal-screen .xterm-helper-textarea')
   // Wait for xterm's prompt and real keyboard focus, not merely the outer
   // React terminal node. Chromium can otherwise send the first keys during
@@ -22,14 +29,10 @@ try {
   await page.waitForFunction(() => document.querySelector('.terminal-screen .xterm-rows')?.textContent?.includes('cka@lab'))
   await input.focus()
   assert.equal(await input.evaluate(el => document.activeElement === el), true)
-  // Exercise xterm through real key events and confirm that the complete
-  // command reached its terminal buffer before Enter. insertText may only
-  // dispatch an input event, which is not a reliable xterm keyboard handshake.
-  const editCommand='k edit svc/catalog-api-svc'
-  await page.keyboard.type(editCommand,{delay:5})
-  await page.waitForFunction(command =>
-    [...document.querySelectorAll('.terminal-screen .xterm-rows .xterm-row')].some(
-      row => row.textContent?.replace(/\s/g, ' ').includes(command)),editCommand,{timeout:5000})
+  // Real keyboard path (not synthetic insertText). Wait on the app's
+  // observable busy/active state, not the internal xterm DOM renderer:
+  // terminal rows can be reflowed/recycled without matching literal text.
+  await page.keyboard.type('k edit svc/catalog-api-svc',{delay:5})
   await input.press('Enter')
   try {
     await page.locator('[data-editor-active="true"]').waitFor()
@@ -39,8 +42,7 @@ try {
       terminalVisible: Boolean(document.querySelector('.terminal-screen .xterm-rows')),
       keyboardFocused: document.activeElement?.classList.contains('xterm-helper-textarea') === true,
       editorActive: Boolean(document.querySelector('[data-editor-active="true"]')),
-      commandEchoed: [...document.querySelectorAll('.terminal-screen .xterm-rows .xterm-row')].some(
-        row => row.textContent?.replace(/\s/g, ' ').includes('k edit svc/catalog-api-svc')),
+      editOpenStatuses,
       labBusy: document.querySelector('.action-left')?.textContent?.includes('Editando con nano') === true,
       hasUiError: Boolean(document.querySelector('.lab .error')),
     }))
