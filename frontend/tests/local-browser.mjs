@@ -29,7 +29,7 @@ try {
   await page.keyboard.type(editCommand,{delay:5})
   await page.waitForFunction(command =>
     [...document.querySelectorAll('.terminal-screen .xterm-rows .xterm-row')].some(
-      row => row.textContent?.includes(command)),editCommand,{timeout:5000})
+      row => row.textContent?.replace(/\s/g, ' ').includes(command)),editCommand,{timeout:5000})
   await input.press('Enter')
   try {
     await page.locator('[data-editor-active="true"]').waitFor()
@@ -40,7 +40,7 @@ try {
       keyboardFocused: document.activeElement?.classList.contains('xterm-helper-textarea') === true,
       editorActive: Boolean(document.querySelector('[data-editor-active="true"]')),
       commandEchoed: [...document.querySelectorAll('.terminal-screen .xterm-rows .xterm-row')].some(
-        row => row.textContent?.includes('k edit svc/catalog-api-svc')),
+        row => row.textContent?.replace(/\s/g, ' ').includes('k edit svc/catalog-api-svc')),
       labBusy: document.querySelector('.action-left')?.textContent?.includes('Editando con nano') === true,
       hasUiError: Boolean(document.querySelector('.lab .error')),
     }))
