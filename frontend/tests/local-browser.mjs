@@ -18,10 +18,10 @@ try {
   assert.equal(await finish.getAttribute('tabindex'),'-1')
   await finish.focus();await page.keyboard.press('Enter')
   assert.equal(await page.locator('dialog[open]').count(),0)
-  await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
-  // The attempt may be visible before the asynchronous prepare() finally
-  // releases the app-level busy guard. Never type while it is still busy.
+  // The attempt may be visible before prepare() releases the busy guard.
+  // Wait while the action bar is visible: maximizing hides it by design.
   await page.locator('.action-left').filter({hasText:'LABORATORIO ACTIVO'}).waitFor()
+  await page.getByRole('button',{name:'Maximizar terminal',exact:true}).click()
   const input=page.locator('.terminal-screen .xterm-helper-textarea')
   // Wait for xterm's prompt and real keyboard focus, not merely the outer
   // React terminal node. Chromium can otherwise send the first keys during
