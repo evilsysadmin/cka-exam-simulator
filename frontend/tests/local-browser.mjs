@@ -22,9 +22,14 @@ try {
   await page.waitForFunction(() => document.querySelector('.terminal-screen .xterm-rows')?.textContent?.includes('cka@lab'))
   await input.focus()
   assert.equal(await input.evaluate(el => document.activeElement === el), true)
-  // A single text insertion is less vulnerable to per-key focus changes than
-  // many synthetic keydown/keyup events; Enter still executes the real prompt.
-  await page.keyboard.insertText('k edit svc/catalog-api-svc')
+  // Exercise xterm through real key events and confirm that the complete
+  // command reached its terminal buffer before Enter. insertText may only
+  // dispatch an input event, which is not a reliable xterm keyboard handshake.
+  const editCommand='k edit svc/catalog-api-svc'
+  await page.keyboard.type(editCommand,{delay:5})
+  await page.waitForFunction(command =>
+    [...document.querySelectorAll('.terminal-screen .xterm-rows .xterm-row')].some(
+      row => row.textContent?.includes(command)),editCommand,{timeout:5000})
   await input.press('Enter')
   try {
     await page.locator('[data-editor-active="true"]').waitFor()
@@ -34,6 +39,8 @@ try {
       terminalVisible: Boolean(document.querySelector('.terminal-screen .xterm-rows')),
       keyboardFocused: document.activeElement?.classList.contains('xterm-helper-textarea') === true,
       editorActive: Boolean(document.querySelector('[data-editor-active="true"]')),
+      commandEchoed: [...document.querySelectorAll('.terminal-screen .xterm-rows .xterm-row')].some(
+        row => row.textContent?.includes('k edit svc/catalog-api-svc')),
       labBusy: document.querySelector('.action-left')?.textContent?.includes('Editando con nano') === true,
       hasUiError: Boolean(document.querySelector('.lab .error')),
     }))
