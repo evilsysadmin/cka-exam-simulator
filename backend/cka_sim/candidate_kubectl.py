@@ -45,9 +45,14 @@ def _resource(words):
         _deny()
     resource, separator, name = words[0].partition("/")
     resources = resource.split(",")
-    if any(item not in READ for item in resources) or len(set(resources)) != len(resources):
+    if any(item not in READ for item in resources):
         _deny()
-    result = [",".join(READ[item] for item in resources)]
+    # Different aliases may identify the same resource (pod,po -> pods).
+    # Validate after canonicalization to reject duplicate kubectl targets.
+    canonical = [READ[item] for item in resources]
+    if len(set(canonical)) != len(canonical):
+        _deny()
+    result = [",".join(canonical)]
     remaining = words[1:]
     if separator:
         if len(resources) != 1 or not NAME.fullmatch(name):

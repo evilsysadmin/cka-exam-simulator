@@ -30,6 +30,17 @@ class CandidateKubectl(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(plan(command)[-2:], ["--namespace", NS])
 
+    def test_resource_aliases_are_unique_after_canonicalization(self):
+        self.assertEqual(plan("kubectl get po,svc"),
+                         ["get", "pods,services", "--namespace", NS])
+        self.assertEqual(plan("kubectl get deploy,events"),
+                         ["get", "deployments,events", "--namespace", NS])
+        for resources in ("pod,po", "pods,pod", "deployment,deploy",
+                          "svc,service", "event,ev", "pods,pods",
+                          "po,svc,pod"):
+            with self.subTest(resources=resources), self.assertRaises(CandidateCommandError):
+                plan("kubectl get " + resources)
+
     def test_matching_explicit_namespace_is_normalized(self):
         expected = ["get", "pods", "--namespace", NS]
         for command in [f"kubectl -n {NS} get po", f"kubectl get pods --namespace={NS}", f"kubectl get pods -n={NS}"]:
