@@ -12,7 +12,25 @@ try {
   await page.goto('http://127.0.0.1:8042')
   // The edit exercise is explicit: do not depend on catalog ordering.
   await page.getByRole('button',{name:/Servicio de catálogo sin backends/}).click()
-  await page.getByRole('button',{name:'Preparar laboratorio',exact:true}).click()
+  const prepare=page.getByRole('button',{name:'Preparar laboratorio',exact:true})
+  // Observe the actual request, not just a downstream button. The server
+  // permits temporary 409 contention while its serialized reaper runs.
+  const deadline=Date.now()+15000
+  while (true) {
+    const [response]=await Promise.all([
+      page.waitForResponse(r=>new URL(r.url()).pathname==='/api/labs/prepare' && r.request().method()==='POST',{timeout:80000}),
+      prepare.click(),
+    ])
+    const status=response.status()
+    console.log('CKA_LOCAL_PREPARE_HTTP '+status)
+    if (status===409 && Date.now()<deadline) {
+      // Wait for the UI to release its busy guard before retrying.
+      await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent?.trim()==='Preparar laboratorio' && !b.disabled),{},{timeout:15000})
+      continue
+    }
+    assert.equal(response.ok(),true,'Local prepare returned HTTP '+status)
+    break
+  }
   const finish=page.getByRole('button',{name:'Finalizar intento',exact:true})
   await finish.waitFor()
   assert.equal(await finish.getAttribute('tabindex'),'-1')
